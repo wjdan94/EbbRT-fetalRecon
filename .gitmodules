@@ -1,0 +1,12 @@
+[submodule "ext/gsl"]
+	path = ext/gsl
+	url = https://github.com/handong32/EbbRT-gsl-libs.git
+[submodule "ext/boost"]
+	path = ext/boost
+	url = https://github.com/handong32/EbbRT-boost.git
+[submodule "data"]
+	path = data
+	url = https://github.com/handong32/fetal-data.git
+[submodule "libs"]
+	path = libs
+	url = https://github.com/handong32/EbbRT-ext-libs.git
