@@ -125,6 +125,7 @@ int main(int argc, char **argv) {
 
   // number of threads
   int numThreads;
+  int numNodes;
 
   bool useCPU = false;
   bool useCPUReg = true;
@@ -269,7 +270,8 @@ int main(int argc, char **argv) {
         "inhomogenities (makes it faster but less reliable for stron intensity "
         "bias)")
 	("numThreads", po::value<int>(&numThreads)->default_value(1),
-                 "Number of CPU threads to run for TBB");
+                 "Number of CPU threads to run for TBB")("numNodes", po::value<int>(&numNodes)->default_value(1),
+                 "Number of back-end EbbRT nodes");
     
     po::variables_map vm;
 
@@ -571,6 +573,7 @@ int main(int argc, char **argv) {
 //  iterations, levels);
 
 #ifndef __MNODE__
+	#error
   reconstruction->SendRecon(iterations);
   gettimeofday(&totend, NULL);
   std::printf("total time: %lf seconds\n",
@@ -579,7 +582,6 @@ int main(int argc, char **argv) {
   
 #else
   
-  int numNodes = 2;
   reconstruction->setNumNodes(numNodes);
   
   auto bindir = boost::filesystem::system_complete(argv[0]).parent_path() /
