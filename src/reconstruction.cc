@@ -579,7 +579,7 @@ int main(int argc, char **argv) {
   
 #else
   
-  int numNodes = 1;
+  int numNodes = 2;
   reconstruction->setNumNodes(numNodes);
   
   auto bindir = boost::filesystem::system_complete(argv[0]).parent_path() /

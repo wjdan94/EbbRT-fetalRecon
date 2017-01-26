@@ -88,7 +88,7 @@ private:
   int numNodes;
 
 public:
-  ebbrt::Promise<void> testFuture;
+  ebbrt::Promise<int> testFuture;
   ebbrt::Promise<int> gaussianreconFuture;
   vector<irtkRealImage> _slices_resampled;
   int _numThreads;
@@ -505,7 +505,7 @@ public:
   ///To compare how simulation from the reconstructed volume matches the original stacks
   void SimulateStacks(vector<irtkRealImage>& stacks);
 
-  void SimulateSlices();
+  void SimulateSlices(bool);
 
   ///Puts origin of the image into origin of world coordinates
   static void ResetOrigin(irtkGreyImage &image,
