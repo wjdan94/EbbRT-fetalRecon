@@ -2626,7 +2626,7 @@ public:
   void operator()(const blocked_range<int> &r) const {
     runCoeffInit(reconstructor, r.begin(), r.end());
   }
-
+  // [SMAFJAS] ALL THE NODES NEED TO RUN THIS FOR ALL THE SLICES 
   // execute
   void operator()() const {
     task_scheduler_init init(nt);
@@ -2661,7 +2661,7 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
 
 	  auto buf = MakeUniqueIOBuf((5 * sizeof(int)) + (4 * sizeof(double)));
 	  auto dp = buf->GetMutDataPointer();
-	  dp.Get<int>() = 0;
+	  dp.Get<int>() = 0; // [SMAFJAS] THIS MEANS CALL COEFF INIT IN THE BACKEND
 	  dp.Get<int>() = start;
 	  dp.Get<int>() = end;
       
@@ -2680,7 +2680,8 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
 	  auto si = std::make_unique<StaticIOBuf>(
 	      reinterpret_cast<const uint8_t *>(_stack_index.data()),
 	      (size_t)(_stack_index.size() * sizeof(int)));
-      	  
+      
+      // [SMAFJAS] Prepending IOBUFS 
 	  buf->PrependChain(std::move(SerializeSlices()));
 	  buf->PrependChain(std::move(SerializeReconstructed()));
 	  buf->PrependChain(std::move(SerializeMask()));
@@ -2713,7 +2714,7 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
 	  SendMessage(nids[i], std::move(buf));
       }
   }
-#endif
+#endif// [SMAFJAS] END OF MNODE
   
   ParallelCoeffInit coeffinit(this, _numThreads);
   coeffinit();
@@ -2723,6 +2724,7 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
   //FORPRINTF("sum recon = %lf\n", SumRecon());
   
 #else
+  // [SMAFJAS] BACKEND
   size_t ncpus = ebbrt::Cpu::Count();
   static ebbrt::SpinBarrier bar(ncpus);
   ebbrt::EventManager::EventContext context;
@@ -2747,6 +2749,7 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
 	      runCoeffInit(this, starte, ende);
 	      count++;
 	      bar.Wait();
+          // [SMAFJAS] REVIEW THIS WHILE MAYBE HERE IS THE PLACE WHERE IT STUCKS
 	      while (count < (size_t)ncpus)
 		  ;
 	      if (mycpu == theCpu) {
@@ -2756,6 +2759,7 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
           indexToCPU(
               i)); // if i don't add indexToCPU, one of the cores never run ? ?
   }
+  // [SMAFJAS] BY SAVING THE CONTEXT WE ARE PAUSING THE EVENT AND THEN LATER IT WILL CONTINUE
   ebbrt::event_manager->SaveContext(context);
 
   //printvolcoeffs();
@@ -2763,7 +2767,7 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
   //FORPRINTF("sum recon = %lf\n", SumRecon());
   
 #endif
-  
+  // [SMAFJAS] THIS SHOULD PROB ONLY RUN IN THE BANCKENDS
   // prepare image for volume weights, will be needed for Gaussian
   // Reconstruction
   _volume_weights.Initialize(_reconstructed.GetImageAttributes());
@@ -2803,8 +2807,9 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
   
 #ifndef __EBBRT_BM__
 #ifdef __MNODE__
+  // [SMAFJAS] BLOCK UNTILS IT GETS ALL THE DATA BACK FROM THE BACKEND
   //FORPRINTF("CoeffInit: Blocking ... \n");
-  testFuture = ebbrt::Promise<int>();
+  testFuture = ebbrt::Promise<int>(); // [SMAFJAS] int 1: SUCCESS
   auto tf = testFuture.GetFuture();
   tf.Block();
   //FORPRINTF("CoeffInit: returned from future\n");
@@ -2905,13 +2910,13 @@ void irtkReconstructionEbb::GaussianReconstruction() {
   retdp.Get<int>() = 1;
   retdp.Get<int>() = _start;
   retdp.Get<int>() = _end;
-
+  // [SMAFJAS] SEND BACK DATA TO THE FRONTEND
   auto vnum = std::make_unique<StaticIOBuf>(
       reinterpret_cast<const uint8_t *>(_voxel_num.data()),
       (size_t)((_end-_start) * sizeof(int)));
   
   retbuf->PrependChain(std::move(vnum));
-  retbuf->PrependChain(std::move(serializeSlices(_reconstructed)));
+  retbuf->PrependChain(std::move(serializeSlices(_reconstructed)));// [SMAFJAS] ACTUAL RECONSTRUCTED DATA
   
   //FORPRINTF("GaussianReconstruction : Sending %d bytes\n", (int)retbuf->ComputeChainDataLength());
   SendMessage(nids[0], std::move(retbuf));
@@ -2920,6 +2925,7 @@ void irtkReconstructionEbb::GaussianReconstruction() {
 //block here before continuing
 #ifndef __EBBRT_BM__
 #ifdef __MNODE__
+  // [SMAFJAS] WAIT FOR ALL DATA
   gaussianreconFuture = ebbrt::Promise<int>();
   auto tf = gaussianreconFuture.GetFuture();
   tf.Block();
@@ -5317,17 +5323,18 @@ done:
   // save final result
   //_reconstructed.Write("3TStackReconstruction.nii");
 }
-
+// [SMAFJAS] THIS IS CALL IMPLICITY EVERY TIME AN IO EVENT OCCUR (EBBRT)
+// [SMAFJAS] REQUIRE WHEN INHERIT MESSAGABLE
 void irtkReconstructionEbb::ReceiveMessage(Messenger::NetworkId nid,
                                            std::unique_ptr<IOBuf> &&buffer) {
   auto dp = buffer->GetDataPointer();
-  auto ret = dp.Get<int>();
+  auto ret = dp.Get<int>();// [SMAFJAS] THIS IS THE FUNCTION 
   //FORPRINTF("Received %d bytes, %d\n", (int)buffer->ComputeChainDataLength(), ret);
   bytesTotal += buffer->ComputeChainDataLength();
   
 // backend
 #ifdef __EBBRT_BM__
-  if (ret == 0) 
+  if (ret == 0) // [SMAFJAS] COEFF INIT FUNCTION
   {
       nids.clear();
       nids.push_back(nid);
@@ -5377,7 +5384,7 @@ void irtkReconstructionEbb::ReceiveMessage(Messenger::NetworkId nid,
       _mix_cpu = 0.9;
       _low_intensity_cutoff = 0.01;
       _adaptive = false;
-
+      // [SMAFJAS] CAN WE PUT THIS IN THE HEADER FILE?
       int directions[13][3] = {{1, 0, -1}, {0, 1, -1}, {1, 1, -1}, {1, -1,
 								    -1},
 			       {1, 0, 0},  {0, 1, 0},  {1, 1, 0},  {1, -1, 0},
@@ -5390,7 +5397,7 @@ void irtkReconstructionEbb::ReceiveMessage(Messenger::NetworkId nid,
       InitializeEM();
       InitializeEMValues();
       CoeffInit(0);
-      
+      // [SMAFJAS] SEND DATA TO THE FRONTEND TO NOTIFY WORK IS DONE
       // sending
       auto retbuf = MakeUniqueIOBuf(1 * sizeof(int));
       auto retdp = retbuf->GetMutDataPointer();
@@ -5693,6 +5700,7 @@ void irtkReconstructionEbb::ReceiveMessage(Messenger::NetworkId nid,
       FORPRINTF("EbbRT BM: ERROR unknown command\n");
   }
 #else
+  // [SMAFJAS] FRONTEND RECEIVE MESSAGE
   if (ret == 0) 
   {
       reconRecv++;
@@ -5713,7 +5721,10 @@ void irtkReconstructionEbb::ReceiveMessage(Messenger::NetworkId nid,
 	  gaussreconptr = (int*) malloc((_end-_start)*sizeof(int));
       }
       
+
       dp.Get((end-start)*sizeof(int), (uint8_t*)gaussreconptr);
+
+      // [SMAFJAS] GATHERS ALL DATA 
       memcpy(_voxel_num.data()+start, gaussreconptr, (end-start)*sizeof(int));
 
       int reconSize = dp.Get<int>();
@@ -5721,7 +5732,7 @@ void irtkReconstructionEbb::ReceiveMessage(Messenger::NetworkId nid,
       {
 	  gaussreconptr2 = (double*) malloc (_reconstructed.GetSizeMat()*sizeof(double));
       }
-      
+      // [SMAFJAS] EXTRACTING THE POINT WHERE THE DATA IS. COPY THE DATE INTO GAUSSRECONPTR2
       dp.Get(reconSize*sizeof(double), (uint8_t*)gaussreconptr2);
       
       _reconstructed.SumVec(gaussreconptr2);
