@@ -54,6 +54,7 @@
 #define NOMINMAX
 #define _USE_MATH_DEFINES
 
+
 #include "irtkReconstructionEbb.h"
 #include <irtkResampling.h>
 #include <irtkRegistration.h>
@@ -1379,9 +1380,11 @@ void irtkReconstructionEbb::RestoreSliceIntensities() {
   //FORPRINTF("sumPartImage: %lf\n", sumPartImage(_slices, _start, _end));
 #ifndef __EBBRT_BM__
 #ifdef __MNODE__
+  FORPRINTF("[H] RestoreIntensities: Bloacking \n");
   testFuture = ebbrt::Promise<int>();
   auto tf = testFuture.GetFuture();
   tf.Block();
+  FORPRINTF("[H] RestoreIntensities: Returning from future \n");
 #endif
 #endif
   
@@ -1447,9 +1450,11 @@ void irtkReconstructionEbb::ScaleVolume() {
 
 #ifndef __EBBRT_BM__
 #ifdef __MNODE__
+  FORPRINTF("[H] ScaleVolume: Bloacking \n");
   gaussianreconFuture = ebbrt::Promise<int>();
   auto tf = gaussianreconFuture.GetFuture();
   tf.Block();
+  FORPRINTF("[H] ScaleVolume: Returning from future \n");
 #endif
 #endif
   
@@ -1551,7 +1556,7 @@ void irtkReconstructionEbb::SimulateSlices(bool a) {
 	if(a) dp.Get<int>() = 9;
 	else dp.Get<int>() = 2;
 	buf->PrependChain(std::move(serializeSlices(_reconstructed)));
-	//FORPRINTF("SimulateSlices : Sending %d bytes\n", (int)buf->ComputeChainDataLength());
+	FORPRINTF("[H] SimulateSlices : Sending %d bytes\n", (int)buf->ComputeChainDataLength());
 	bytesTotal += buf->ComputeChainDataLength();
 	SendMessage(nids[i], std::move(buf));
     }
@@ -1583,9 +1588,13 @@ void irtkReconstructionEbb::SimulateSlices(bool a) {
             ende = (ende > _end) ? _end : ende;
             runSimulateSlices(this, starte, ende);
             count++;
+	    FORPRINTF("[BM] SimulateSlices CPU %d barrier wait\n", mycpu);
             bar.Wait();
+	    FORPRINTF("[BM] SimulateSlices CPU %d barrier done\n", mycpu);
+	    FORPRINTF("[BM] SimulateSlices CPU %d while wait\n", mycpu);
             while (count < (size_t)ncpus)
               ;
+	    FORPRINTF("[BM] SimulateSlices CPU %d while done\n", mycpu);
             if (mycpu == theCpu) {
               ebbrt::event_manager->ActivateContext(std::move(context));
             }
@@ -1605,9 +1614,11 @@ void irtkReconstructionEbb::SimulateSlices(bool a) {
 
 #ifndef __EBBRT_BM__
 #ifdef __MNODE__
+FORPRINTF("[H] SimulateSlices: Bloacking \n");
 testFuture = ebbrt::Promise<int>();
 auto tf = testFuture.GetFuture();
 tf.Block();
+FORPRINTF("[H] SimulateSlices: Returning from future \n");
 #endif
 #endif
 }
@@ -2251,9 +2262,11 @@ void irtkReconstructionEbb::SliceToVolumeRegistration() {
   ParallelSliceToVolumeRegistration registration(this, _numThreads, _start, _end);
   registration();
   
+  FORPRINTF("[H] SliceToVolume: Bloacking \n");
   testFuture = ebbrt::Promise<int>();
   auto tf = testFuture.GetFuture();
   tf.Block();
+  FORPRINTF("[H] SliceToVolume: Returning from future\n");
   
   //FORPRINTF("SliceToVolumeRegistration : %lf %lf %lf %lf\n", sumTrans(_transformations, 0, _slices.size()), sumTrans2(_transformations, 0, _slices.size()), sumPartImage(_slices, 0, _slices.size()), _reconstructed.Sum());
 #else
@@ -2282,9 +2295,13 @@ void irtkReconstructionEbb::SliceToVolumeRegistration() {
 	      ende = (ende > _end) ? _end : ende;
 	      runSliceToVolumeRegistration(this, starte, ende);
 	      count++;
+	      FORPRINTF("[BM] ParallelSliceToVolume CPU %d barrier wait\n", mycpu);
 	      bar.Wait();
+	      FORPRINTF("[BM] ParallelSliceToVolume CPU %d barrier done\n", mycpu);
+	      FORPRINTF("[BM] ParallelSliceToVolume CPU %d while wait\n", mycpu);
 	      while (count < (size_t)ncpus)
 		  ;
+	      FORPRINTF("[BM] ParallelSliceToVolume CPU %d while done\n", mycpu);
 	      if (mycpu == theCpu) {
 		  ebbrt::event_manager->ActivateContext(std::move(context));
 	      }
@@ -2733,7 +2750,7 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
   int diff = _slices.size();
       
   for (size_t i = 0; i < ncpus; i++) {
-      //FORPRINTF("running cpu %d of %d\n", (int) i, (int)ncpus);
+      FORPRINTF("[BM] CoeffInit Running cpu %d of %d\n", (int) i, (int)ncpus);
       // spawn jobs on each core using SpawnRemote
       ebbrt::event_manager->SpawnRemote(
           [this, theCpu, ncpus, &count, &context, i, diff]() {
@@ -2748,10 +2765,15 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
 	      //FORPRINTF("%d: sum =  %lf\n", i, sumOneImage(this->_mask));
 	      runCoeffInit(this, starte, ende);
 	      count++;
+              
+	      FORPRINTF("[BM] CoeffInit CPU %d barrier wait\n", mycpu);
 	      bar.Wait();
+	      FORPRINTF("[BM] CoeffInit CPU %d barrier OK\n", mycpu);
           // [SMAFJAS] REVIEW THIS WHILE MAYBE HERE IS THE PLACE WHERE IT STUCKS
+	      FORPRINTF("[BM] CoeffInit CPU %d inside while\n", mycpu);
 	      while (count < (size_t)ncpus)
 		  ;
+	      FORPRINTF("[BM] CoeffInit CPU %d outside while\n", mycpu);
 	      if (mycpu == theCpu) {
 		  ebbrt::event_manager->ActivateContext(std::move(context));
 	      }
@@ -2808,11 +2830,11 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
 #ifndef __EBBRT_BM__
 #ifdef __MNODE__
   // [SMAFJAS] BLOCK UNTILS IT GETS ALL THE DATA BACK FROM THE BACKEND
-  //FORPRINTF("CoeffInit: Blocking ... \n");
+  FORPRINTF("[H] CoeffInit: Blocking ... \n");
   testFuture = ebbrt::Promise<int>(); // [SMAFJAS] int 1: SUCCESS
   auto tf = testFuture.GetFuture();
   tf.Block();
-  //FORPRINTF("CoeffInit: returned from future\n");
+  FORPRINTF("[H] CoeffInit: returned from future\n");
 #endif
 #endif
 
@@ -2926,10 +2948,11 @@ void irtkReconstructionEbb::GaussianReconstruction() {
 #ifndef __EBBRT_BM__
 #ifdef __MNODE__
   // [SMAFJAS] WAIT FOR ALL DATA
+  FORPRINTF("[H] GaussianReconstruction: Blocking\n");   
   gaussianreconFuture = ebbrt::Promise<int>();
   auto tf = gaussianreconFuture.GetFuture();
   tf.Block();
-  //FORPRINTF("GaussianReconstruction: returned from future\n");   
+  FORPRINTF("[H] GaussianReconstruction: returned from future\n");   
 #endif
 #endif
    
@@ -3085,9 +3108,11 @@ void irtkReconstructionEbb::InitializeRobustStatistics() {
   
 #ifndef __EBBRT_BM__
 #ifdef __MNODE__
+    FORPRINTF("[H] RobustStatistics: Bloacking \n");
     testFuture = ebbrt::Promise<int>();
     auto tf = testFuture.GetFuture();
     tf.Block();
+    FORPRINTF("[H] RobustStatistics: Returning from Future \n");
 #endif
 
   // Force exclusion of slices predefined by user - not needed - Han
@@ -3324,9 +3349,11 @@ void irtkReconstructionEbb::EStep() {
     _tmaxs = parallelEStep.maxs;
     _tmins = parallelEStep.mins;
 
+    FORPRINTF("[H] EStep: Bloacking \n");
     testFuture = ebbrt::Promise<int>();
     auto tf = testFuture.GetFuture();
     tf.Block();
+    FORPRINTF("[H] Estep: Returning from future \n");
 #else
     ParallelEStep parallelEStep(this, slice_potential, _numThreads, 0, _slices.size());
     parallelEStep();
@@ -3381,9 +3408,13 @@ void irtkReconstructionEbb::EStep() {
 		    }
 
 		    count++;
+		    FORPRINTF("[BM] EStep CPU %d barrier wait\n", mycpu);
 		    bar.Wait();
+		    FORPRINTF("[BM] EStep CPU %d barrier done\n", mycpu);
+		    FORPRINTF("[BM] EStep CPU %d while wait\n", mycpu);
 		    while (count < (size_t)ncpus)
 			;
+		    FORPRINTF("[BM] EStep CPU %d while done\n", mycpu);
 		    if (mycpu == theCpu) {
 			ebbrt::event_manager->ActivateContext(std::move(context));
 		    }
@@ -3473,9 +3504,11 @@ void irtkReconstructionEbb::EStep() {
     }
 
 #ifdef __MNODE__
+    FORPRINTF("[H] EStep: Bloacking \n");
     testFuture = ebbrt::Promise<int>();
     auto tf2 = testFuture.GetFuture();
     tf2.Block();
+    FORPRINTF("[H] Estep: Returning from future \n");
 #endif
   
     //FORPRINTF("%lf %lf %lf %lf\n", _ttsum, _ttden, _ttsum2, _ttden2);
@@ -3581,9 +3614,11 @@ void irtkReconstructionEbb::EStep() {
   }
 
 #ifdef __MNODE__
+    FORPRINTF("[H] EStep: Bloacking \n");
     testFuture = ebbrt::Promise<int>();
     auto tf3 = testFuture.GetFuture();
     tf3.Block();
+    FORPRINTF("[H] Estep: Returning from future \n");
 #endif
     
     if (_ttnum > 0)
@@ -3669,9 +3704,11 @@ void irtkReconstructionEbb::Scale() {
     scale();
     //FORPRINTF("Scale() : _scale_cpu = %lf\n", sumPartVec(_scale_cpu, _start, _end));
     
+    FORPRINTF("[H] Scale: Bloacking \n");
     testFuture = ebbrt::Promise<int>();
     auto tf = testFuture.GetFuture();
     tf.Block();
+    FORPRINTF("[H] Scale: Returning from future \n");
 #else
     ParallelScale scale(this, _numThreads, 0, _slices.size());
     scale();
@@ -4038,9 +4075,11 @@ void irtkReconstructionEbb::Superresolution(int iter) {
   _addon = parallelSuperresolution.addon;
   _confidence_map = parallelSuperresolution.confidence_map;
   
+  FORPRINTF("[H] ParallelSuperResolution: Bloacking \n");
   testFuture = ebbrt::Promise<int>();
   auto tf = testFuture.GetFuture();
   tf.Block();
+  FORPRINTF("[H] ParallelSuperRedolution: Returning from future \n");
 
 #else
   ParallelSuperresolution parallelSuperresolution(this, _numThreads, 0, _slices.size());
@@ -4096,9 +4135,13 @@ void irtkReconstructionEbb::Superresolution(int iter) {
 	      }
 
 	      count++;
+	      FORPRINTF("[BM] Superresolution CPU %d barrier wait\n", mycpu);
 	      bar.Wait();
+	      FORPRINTF("[BM] Superresolution CPU %d barrier done\n", mycpu);
+	      FORPRINTF("[BM] Superresolution CPU %d while wait\n", mycpu);
 	      while (count < (size_t)ncpus)
 		  ;
+	      FORPRINTF("[BM] Superresolution CPU %d while done\n", mycpu);
 	      if (mycpu == theCpu) {
 		  ebbrt::event_manager->ActivateContext(std::move(context));
 	      }
@@ -4282,9 +4325,11 @@ void irtkReconstructionEbb::MStep(int iter) {
     _mmin = parallelMStep.min;
     _mmax = parallelMStep.max;
 
+    FORPRINTF("[H] MStep: Bloacking \n");
     testFuture = ebbrt::Promise<int>();
     auto tf = testFuture.GetFuture();
     tf.Block();
+    FORPRINTF("[H] MStep: Returning from future \n");
     
 #else
     
@@ -4345,9 +4390,13 @@ void irtkReconstructionEbb::MStep(int iter) {
 	      }
 
 	      count++;
+	      FORPRINTF("[BM] MStep CPU %d barrier wait\n", mycpu);
 	      bar.Wait();
+	      FORPRINTF("[BM] MStep CPU %d barrier done\n", mycpu);
+	      FORPRINTF("[BM] MStep CPU %d while wait\n", mycpu);
 	      while (count < (size_t)ncpus)
 		  ;
+	      FORPRINTF("[BM] MStep CPU %d while done\n", mycpu);
 	      if (mycpu == theCpu) {
 		  ebbrt::event_manager->ActivateContext(std::move(context));
 	      }
@@ -5329,7 +5378,11 @@ void irtkReconstructionEbb::ReceiveMessage(Messenger::NetworkId nid,
                                            std::unique_ptr<IOBuf> &&buffer) {
   auto dp = buffer->GetDataPointer();
   auto ret = dp.Get<int>();// [SMAFJAS] THIS IS THE FUNCTION 
-  //FORPRINTF("Received %d bytes, %d\n", (int)buffer->ComputeChainDataLength(), ret);
+#ifdef __EBBRT_BM__
+  FORPRINTF("[BM] Received %d bytes, %d\n", (int)buffer->ComputeChainDataLength(), ret);
+#else
+  FORPRINTF("[H] Received %d bytes, %d\n", (int)buffer->ComputeChainDataLength(), ret);
+#endif
   bytesTotal += buffer->ComputeChainDataLength();
   
 // backend
@@ -5571,7 +5624,7 @@ void irtkReconstructionEbb::ReceiveMessage(Messenger::NetworkId nid,
       retdp.Get<int>() = 8;
       retbuf->PrependChain(std::move(serializeSlices(_addon)));
       retbuf->PrependChain(std::move(serializeSlices(_confidence_map)));
-      // FORPRINTF("Superresolution : Sending %d bytes\n", (int)retbuf->ComputeChainDataLength());
+      FORPRINTF("[BM] ret 8 - Superresolution : Sending %d bytes\n", (int)retbuf->ComputeChainDataLength());
       SendMessage(nids[0], std::move(retbuf));
   }
   else if(ret == 9)
