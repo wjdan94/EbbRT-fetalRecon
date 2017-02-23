@@ -28,6 +28,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
+#include <ebbrt/Cpu.h>
 
 #include <ebbrt/hosted/Clock.h>
 #include <ebbrt/hosted/Context.h>
@@ -41,6 +42,10 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+
+// TODO: fix this later
+int ARGC;
+char** ARGV;
 
 namespace po = boost::program_options;
 
@@ -71,11 +76,7 @@ const std::string currentDateTime() {
   return buf;
 }
 
-int main(int argc, char **argv) {
-  Runtime runtime;
-  Context c(runtime);
-  ContextActivation activation(c);
-
+void AppMain() {
   struct timeval totstart, totend;
   gettimeofday(&totstart, NULL);
 
@@ -276,26 +277,25 @@ int main(int argc, char **argv) {
     po::variables_map vm;
 
     try {
-      po::store(po::parse_command_line(argc, argv, desc), vm); // can throw
+      po::store(po::parse_command_line(ARGC, ARGV, desc), vm); // can throw
 
       if (vm.count("help")) {
         std::cout << "Application to perform reconstruction of volumetric MRI "
                      "from thick slices."
                   << std::endl
                   << desc << std::endl;
-        return EXIT_SUCCESS;
       }
 
       po::notify(vm);
     } catch (po::error &e) {
       std::cerr << "ERROR: " << e.what() << std::endl << std::endl;
       std::cerr << desc << std::endl;
-      return EXIT_FAILURE;
+      exit(EXIT_FAILURE);
     }
   } catch (std::exception &e) {
     std::cerr << "Unhandled exception while parsing arguments:  " << e.what()
               << ", application will now exit" << std::endl;
-    return EXIT_FAILURE;
+    exit(EXIT_FAILURE);
   }
 
   if (useCPU) {
@@ -584,7 +584,7 @@ int main(int argc, char **argv) {
   
   reconstruction->setNumNodes(numNodes);
   
-  auto bindir = boost::filesystem::system_complete(argv[0]).parent_path() /
+  auto bindir = boost::filesystem::system_complete(ARGV[0]).parent_path() /
                 "/bm/reconstruction.elf32";
 
   for (i = 0; i < numNodes; i++) {
@@ -592,7 +592,7 @@ int main(int argc, char **argv) {
         node_allocator->AllocateNode(bindir.string(), numThreads, 1, 32);
 	//node_allocator->AllocateNode(bindir.string(), numThreads, 1, 2);
     node_desc.NetworkId().Then(
-        [reconstruction, &c](Future<Messenger::NetworkId> f) {
+        [reconstruction](Future<Messenger::NetworkId> f) {
           // pass context c
           auto nid = f.Get();
           reconstruction->addNid(nid);
@@ -604,19 +604,14 @@ int main(int argc, char **argv) {
         f.Get();
         std::cout << "all nodes initialized" << std::endl;
         ebbrt::event_manager->Spawn([reconstruction, iterations]() {
-		//int asd;
-		//cout << "Please enter an integer value: ";
-		//cin >> asd;
           reconstruction->SendRecon(iterations);
         });
       });
 
-  reconstruction->waitReceive().Then([&c](ebbrt::Future<void> f) {
+  reconstruction->waitReceive().Then([](ebbrt::Future<void> f) {
     f.Get();
-    c.io_service_.stop();
+    ebbrt::Cpu::Exit(0);
   });
-  
-  c.Run();
   
   gettimeofday(&totend, NULL);
   std::printf("total time: %lf seconds\n",
@@ -624,6 +619,19 @@ int main(int argc, char **argv) {
 	      ((totend.tv_usec - totstart.tv_usec) / 1000000.0));
   printf("EBBRT ends\n");
 #endif
+}
+
+int main(int argc, char **argv) {
+
+  ARGC = argc;
+  ARGV = argv;
+  void* status;
+
+  pthread_t tid = ebbrt::Cpu::EarlyInit(1);
+  pthread_join(tid, &status);
+
+  ebbrt::Cpu::Exit(0);
+  return 0;
 }
 
 #pragma GCC diagnostic pop
