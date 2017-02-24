@@ -35,6 +35,8 @@
 #include <ebbrt/hosted/ContextActivation.h>
 #include <ebbrt/hosted/GlobalIdMap.h>
 #include <ebbrt/hosted/NodeAllocator.h>
+#include <ebbrt/hosted/PoolAllocator.h>
+
 #include <ebbrt/hosted/Runtime.h>
 #include <ebbrt/hosted/StaticIds.h>
 
@@ -79,7 +81,6 @@ const std::string currentDateTime() {
 void AppMain() {
   struct timeval totstart, totend;
   gettimeofday(&totstart, NULL);
-
   int i, ok;
   char buffer[256];
   irtkRealImage stack;
@@ -150,6 +151,7 @@ void AppMain() {
   /// Name for output volume
   string outputName;
   unsigned int num_input_stacks_tuner = 0;
+  
   string referenceVolumeName;
   unsigned int T1PackageSize = 0;
   unsigned int numDevicesToUse = UINT_MAX;
@@ -354,6 +356,34 @@ void AppMain() {
 
   auto reconstruction = irtkReconstructionEbb::Create();
   reconstruction->setNumThreads(numThreads);
+  reconstruction->setNumNodes(numNodes);
+
+
+  auto bindir = boost::filesystem::system_complete(ARGV[0]).parent_path() /
+                "/bm/reconstruction.elf32";
+
+  try {
+    ebbrt::pool_allocator->AllocatePool(bindir.string(), numNodes);
+  } catch (std::runtime_error& e) {
+    std::cerr << e.what() << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  
+  // Initialize Pool futures
+  for (unsigned int i=0 ; i < numNodes; i++) {
+    pool_allocator->pool_futures.push_back(Promise<int>());
+  }
+  
+  for (unsigned int i=0 ; i < numNodes; i++) {
+    // Waiting for Future
+    auto nf = pool_allocator->pool_futures[i].GetFuture();
+    nf.Block();
+    pool_allocator->node_descriptors_[i].NetworkId().Then([reconstruction](Future<Messenger::NetworkId> f) {
+        auto nid = f.Get();
+        reconstruction->addNid(nid);
+    });
+  }
+
   
   if (useSINCPSF) {
     reconstruction->useSINCPSF();
@@ -572,37 +602,10 @@ void AppMain() {
 //  useCPU, disableBiasCorr, sigma, global_bias_correction, lastIterLambda,
 //  iterations, levels);
 
-#ifndef __MNODE__
-	#error
-  reconstruction->SendRecon(iterations);
-  gettimeofday(&totend, NULL);
-  std::printf("total time: %lf seconds\n",
-              (totend.tv_sec - totstart.tv_sec) +
-	      ((totend.tv_usec - totstart.tv_usec) / 1000000.0));
-  
-#else
-  
-  reconstruction->setNumNodes(numNodes);
-  
-  auto bindir = boost::filesystem::system_complete(ARGV[0]).parent_path() /
-                "/bm/reconstruction.elf32";
-
-  for (i = 0; i < numNodes; i++) {
-    auto node_desc =
-        node_allocator->AllocateNode(bindir.string(), numThreads, 1, 32);
-	//node_allocator->AllocateNode(bindir.string(), numThreads, 1, 2);
-    node_desc.NetworkId().Then(
-        [reconstruction](Future<Messenger::NetworkId> f) {
-          // pass context c
-          auto nid = f.Get();
-          reconstruction->addNid(nid);
-        });
-  }
-
   reconstruction->waitNodes().Then(
       [reconstruction, iterations](ebbrt::Future<void> f) {
         f.Get();
-        std::cout << "all nodes initialized" << std::endl;
+        std::cout << "All nodes initialized" << std::endl;
         ebbrt::event_manager->Spawn([reconstruction, iterations]() {
           reconstruction->SendRecon(iterations);
         });
@@ -618,7 +621,6 @@ void AppMain() {
               (totend.tv_sec - totstart.tv_sec) +
 	      ((totend.tv_usec - totstart.tv_usec) / 1000000.0));
   printf("EBBRT ends\n");
-#endif
 }
 
 int main(int argc, char **argv) {
