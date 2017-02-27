@@ -279,7 +279,7 @@ void AppMain() {
     po::variables_map vm;
 
     try {
-      po::store(po::parse_command_line(ARGC, ARGV, desc), vm); // can throw
+      po::store(po::command_line_parser(ARGC, ARGV).options(desc).allow_unregistered().run(), vm);
 
       if (vm.count("help")) {
         std::cout << "Application to perform reconstruction of volumetric MRI "
@@ -362,6 +362,10 @@ void AppMain() {
   auto bindir = boost::filesystem::system_complete(ARGV[0]).parent_path() /
                 "/bm/reconstruction.elf32";
 
+  struct timeval allocation_time_start;
+
+  gettimeofday(&allocation_time_start, NULL);
+
   try {
     ebbrt::pool_allocator->AllocatePool(bindir.string(), numNodes);
   } catch (std::runtime_error& e) {
@@ -378,13 +382,12 @@ void AppMain() {
     // Waiting for Future
     auto nf = pool_allocator->pool_futures[i].GetFuture();
     nf.Block();
-    pool_allocator->node_descriptors_[i].NetworkId().Then([reconstruction](Future<Messenger::NetworkId> f) {
+    pool_allocator->node_descriptors_[i].NetworkId().Then([reconstruction, i, numNodes, allocation_time_start](Future<Messenger::NetworkId> f) {
         auto nid = f.Get();
         reconstruction->addNid(nid);
     });
   }
 
-  
   if (useSINCPSF) {
     reconstruction->useSINCPSF();
   }
@@ -602,6 +605,7 @@ void AppMain() {
 //  useCPU, disableBiasCorr, sigma, global_bias_correction, lastIterLambda,
 //  iterations, levels);
 
+
   reconstruction->waitNodes().Then(
       [reconstruction, iterations](ebbrt::Future<void> f) {
         f.Get();
@@ -611,16 +615,17 @@ void AppMain() {
         });
       });
 
-  reconstruction->waitReceive().Then([](ebbrt::Future<void> f) {
+  reconstruction->waitReceive().Then([totstart](ebbrt::Future<void> f) {
     f.Get();
+    struct timeval totend;
+    gettimeofday(&totend, NULL);
+    std::printf("tTotal time: %lf seconds\n",
+      (totend.tv_sec - totstart.tv_sec) +
+      ((totend.tv_usec - totstart.tv_usec) / 1000000.0));
+    printf("EBBRT ends\n");
     ebbrt::Cpu::Exit(0);
   });
   
-  gettimeofday(&totend, NULL);
-  std::printf("total time: %lf seconds\n",
-              (totend.tv_sec - totstart.tv_sec) +
-	      ((totend.tv_usec - totstart.tv_usec) / 1000000.0));
-  printf("EBBRT ends\n");
 }
 
 int main(int argc, char **argv) {
@@ -629,9 +634,33 @@ int main(int argc, char **argv) {
   ARGV = argv;
   void* status;
 
-  pthread_t tid = ebbrt::Cpu::EarlyInit(1);
-  pthread_join(tid, &status);
+  int numFrontEndCpus;
+  
+  try {
+    po::options_description desc("Options");
+    desc.add_options()("help,h", "Print usage messages")
+    ("numFrontEndCpus", po::value<int>(&numFrontEndCpus)->default_value(1));
+  
+    po::variables_map vm;
 
+    try {
+      po::store(po::command_line_parser(argc, argv).options(desc).allow_unregistered().run(), vm);
+      po::notify(vm);
+    } catch (po::error &e) {
+      std::cerr << "ERROR: " << e.what() << std::endl << std::endl;
+      std::cerr << desc << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  } catch (std::exception &e) {
+    std::cerr << "Unhandled exception while parsing arguments:  " << e.what()
+              << ", application will now exit" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  pthread_t tid = ebbrt::Cpu::EarlyInit((size_t) numFrontEndCpus);
+  pthread_join(tid, &status);
+  
+  std::cout << "FrontEndCPUS" << numFrontEndCpus << std::endl;
   ebbrt::Cpu::Exit(0);
   return 0;
 }
