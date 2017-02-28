@@ -77,8 +77,6 @@
 #include <ebbrt/UniqueIOBuf.h>
 #include <ebbrt/Future.h>
 
-//#define __MNODE__
-
 #ifdef __EBBRT_BM__
 #include <ebbrt/SpinLock.h>
 #include <ebbrt/native/Clock.h>
@@ -1344,7 +1342,6 @@ void irtkReconstructionEbb::RestoreSliceIntensities() {
   irtkRealPixel *p;
 
 #ifndef _EBBRT_BM__
-#ifdef __MNODE__
   for (int i = 0; i < (int)nids.size(); i++) 
   {
       auto buf = MakeUniqueIOBuf(1 * sizeof(int));
@@ -1355,15 +1352,10 @@ void irtkReconstructionEbb::RestoreSliceIntensities() {
       SendMessage(nids[i], std::move(buf));
   }
 #endif
-#endif
 
   //FORPRINTF("sumPartImage: %lf\n", sumPartImage(_slices, _start, _end));
   
-#ifndef __MNODE__
-  for (inputIndex = 0; inputIndex < _slices.size(); inputIndex++)
-#else
   for (inputIndex = _start; inputIndex < _end; inputIndex++)
-#endif
   {
       // calculate scaling factor
       factor = _stack_factor[_stack_index[inputIndex]]; //_average_value;
@@ -1379,13 +1371,11 @@ void irtkReconstructionEbb::RestoreSliceIntensities() {
 
   //FORPRINTF("sumPartImage: %lf\n", sumPartImage(_slices, _start, _end));
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
   FORPRINTF("[H] RestoreIntensities: Bloacking \n");
   testFuture = ebbrt::Promise<int>();
   auto tf = testFuture.GetFuture();
   tf.Block();
   FORPRINTF("[H] RestoreIntensities: Returning from future \n");
-#endif
 #endif
   
 }
@@ -1397,7 +1387,6 @@ void irtkReconstructionEbb::ScaleVolume() {
   _sscaleden = 0;
 
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
   for (int i = 0; i < (int)nids.size(); i++) 
   {
       auto buf = MakeUniqueIOBuf(1 * sizeof(int));
@@ -1408,16 +1397,11 @@ void irtkReconstructionEbb::ScaleVolume() {
       SendMessage(nids[i], std::move(buf));
   }
 #endif
-#endif
 
   //FORPRINTF("_weights = %lf\n_slices = %lf\n_simulated_slices = %lf\n_slice_weight_cpu = %lf\n", sumPartImage(_weights, _start, _end), sumPartImage(_slices, _start, _end), sumPartImage(_simulated_slices, _start, _end), sumPartVec(_slice_weight_cpu, _start, _end) );
 
   
-#ifndef __MNODE__
-  for (inputIndex = 0; inputIndex < _slices.size(); inputIndex++)
-#else
   for (inputIndex = _start; inputIndex < _end; inputIndex++)
-#endif
   {
     // alias for the current slice
     irtkRealImage &slice = _slices[inputIndex];
@@ -1449,13 +1433,11 @@ void irtkReconstructionEbb::ScaleVolume() {
 #endif
 
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
   FORPRINTF("[H] ScaleVolume: Bloacking \n");
   gaussianreconFuture = ebbrt::Promise<int>();
   auto tf = gaussianreconFuture.GetFuture();
   tf.Block();
   FORPRINTF("[H] ScaleVolume: Returning from future \n");
-#endif
 #endif
   
   // calculate scale for the volume
@@ -1548,7 +1530,6 @@ public:
 
 void irtkReconstructionEbb::SimulateSlices(bool a) {
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
     for (int i = 0; i < (int)nids.size(); i++) 
     {
 	auto buf = MakeUniqueIOBuf(1 * sizeof(int));
@@ -1561,10 +1542,6 @@ void irtkReconstructionEbb::SimulateSlices(bool a) {
 	SendMessage(nids[i], std::move(buf));
     }
     ParallelSimulateSlices parallelSimulateSlices(this, _numThreads, _start, _end);
-#else
-    ParallelSimulateSlices parallelSimulateSlices(this, _numThreads, 0, _slices.size());
-#endif
-
     parallelSimulateSlices();
 
 #else
@@ -1613,13 +1590,11 @@ void irtkReconstructionEbb::SimulateSlices(bool a) {
 //FORPRINTF("\n**********************\n");
 
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
 FORPRINTF("[H] SimulateSlices: Bloacking \n");
 testFuture = ebbrt::Promise<int>();
 auto tf = testFuture.GetFuture();
 tf.Block();
 FORPRINTF("[H] SimulateSlices: Returning from future \n");
-#endif
 #endif
 }
 
@@ -2246,7 +2221,6 @@ void irtkReconstructionEbb::SliceToVolumeRegistration() {
   }
 
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
   for (int i = 0; i < (int)nids.size(); i++) 
   {
       auto buf = MakeUniqueIOBuf((1 * sizeof(int)));
@@ -2269,12 +2243,6 @@ void irtkReconstructionEbb::SliceToVolumeRegistration() {
   FORPRINTF("[H] SliceToVolume: Returning from future\n");
   
   //FORPRINTF("SliceToVolumeRegistration : %lf %lf %lf %lf\n", sumTrans(_transformations, 0, _slices.size()), sumTrans2(_transformations, 0, _slices.size()), sumPartImage(_slices, 0, _slices.size()), _reconstructed.Sum());
-#else
-  //FORPRINTF("SliceToVolumeRegistration : %lf %lf %lf %lf\n", sumTrans(_transformations, 0, _slices.size()), sumTrans2(_transformations, 0, _slices.size()), sumPartImage(_slices, 0, _slices.size()), _reconstructed.Sum());
-  ParallelSliceToVolumeRegistration registration(this, _numThreads, 0, _slices.size());
-  registration();
-  //FORPRINTF("SliceToVolumeRegistration : %lf %lf %lf %lf\n", sumTrans(_transformations, 0, _slices.size()), sumTrans2(_transformations, 0, _slices.size()), sumPartImage(_slices, 0, _slices.size()), _reconstructed.Sum());
-#endif
 #else
   size_t ncpus = ebbrt::Cpu::Count();
   static ebbrt::SpinBarrier bar(ncpus);
@@ -2660,7 +2628,6 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
   _slice_inside_cpu.resize(_slices.size());
   
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__  
   if (iter == 0) {
       int diff = _slices.size();
       int factor = (int)ceil(diff / (float)(numNodes+1));
@@ -2731,7 +2698,6 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
 	  SendMessage(nids[i], std::move(buf));
       }
   }
-#endif// [SMAFJAS] END OF MNODE
   
   ParallelCoeffInit coeffinit(this, _numThreads);
   coeffinit();
@@ -2828,14 +2794,12 @@ void irtkReconstructionEbb::CoeffInit(int iter) {
   
   
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
   // [SMAFJAS] BLOCK UNTILS IT GETS ALL THE DATA BACK FROM THE BACKEND
   FORPRINTF("[H] CoeffInit: Blocking ... \n");
   testFuture = ebbrt::Promise<int>(); // [SMAFJAS] int 1: SUCCESS
   auto tf = testFuture.GetFuture();
   tf.Block();
   FORPRINTF("[H] CoeffInit: returned from future\n");
-#endif
 #endif
 
 } // end of CoeffInit()
@@ -2850,7 +2814,6 @@ void irtkReconstructionEbb::GaussianReconstruction() {
   int slice_vox_num;
 
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
   for (int i = 0; i < (int)nids.size(); i++) 
   {
       auto buf = MakeUniqueIOBuf(1 * sizeof(int));
@@ -2861,7 +2824,6 @@ void irtkReconstructionEbb::GaussianReconstruction() {
       bytesTotal += buf->ComputeChainDataLength();
       SendMessage(nids[i], std::move(buf));
   }
-#endif
   _voxel_num.resize(_slices.size());
 #else
   _voxel_num.resize(_end-_start);
@@ -2871,11 +2833,7 @@ void irtkReconstructionEbb::GaussianReconstruction() {
   _reconstructed = 0;
 
   // CPU
-#ifdef __MNODE__
   for (inputIndex = _start; inputIndex < _end; ++inputIndex) {
-#else
-    for (inputIndex = 0; inputIndex < _slices.size(); ++inputIndex) {
-#endif
     // copy the current slice
     slice = _slices[inputIndex];
     // alias the current bias image
@@ -2946,14 +2904,12 @@ void irtkReconstructionEbb::GaussianReconstruction() {
   
 //block here before continuing
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
   // [SMAFJAS] WAIT FOR ALL DATA
   FORPRINTF("[H] GaussianReconstruction: Blocking\n");   
   gaussianreconFuture = ebbrt::Promise<int>();
   auto tf = gaussianreconFuture.GetFuture();
   tf.Block();
   FORPRINTF("[H] GaussianReconstruction: returned from future\n");   
-#endif
 #endif
    
   // now find slices with small overlap with ROI and exclude them.
@@ -3066,7 +3022,6 @@ void irtkReconstructionEbb::InitializeRobustStatistics() {
   _tnum = 0;
   
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
   for (i = 0; i < (int)nids.size(); i++) 
   {
       auto buf = MakeUniqueIOBuf(1 * sizeof(int));
@@ -3077,14 +3032,9 @@ void irtkReconstructionEbb::InitializeRobustStatistics() {
       SendMessage(nids[i], std::move(buf));
   }
 #endif
-#endif
 
   // for each slice
-#ifdef __MNODE__
   for (unsigned int inputIndex = _start; inputIndex < _end; inputIndex++) {
-#else
-    for (unsigned int inputIndex = 0; inputIndex < _slices.size(); inputIndex++) {
-#endif
     slice = _slices[inputIndex];
 
     // Voxel-wise sigma will be set to stdev of volumetric errors
@@ -3107,13 +3057,11 @@ void irtkReconstructionEbb::InitializeRobustStatistics() {
   }
   
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
     FORPRINTF("[H] RobustStatistics: Bloacking \n");
     testFuture = ebbrt::Promise<int>();
     auto tf = testFuture.GetFuture();
     tf.Block();
     FORPRINTF("[H] RobustStatistics: Returning from Future \n");
-#endif
 
   // Force exclusion of slices predefined by user - not needed - Han
   // for (unsigned int i = 0; i < _force_excluded.size(); i++)
@@ -3315,7 +3263,6 @@ void irtkReconstructionEbb::EStep() {
     std::fill(slice_potential.begin(), slice_potential.end(), 0);
 	
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
     for (int i = 0; i < (int)nids.size(); i++) 
     {
 	auto buf = MakeUniqueIOBuf((2 * sizeof(int)) + (5 * sizeof(double)));
@@ -3354,17 +3301,6 @@ void irtkReconstructionEbb::EStep() {
     auto tf = testFuture.GetFuture();
     tf.Block();
     FORPRINTF("[H] Estep: Returning from future \n");
-#else
-    ParallelEStep parallelEStep(this, slice_potential, _numThreads, 0, _slices.size());
-    parallelEStep();
-
-    _tsum = parallelEStep.sum;
-    _tden = parallelEStep.den;
-    _tsum2 = parallelEStep.sum2;
-    _tden2 = parallelEStep.den2;
-    _tmaxs = parallelEStep.maxs;
-    _tmins = parallelEStep.mins;
-#endif
     
 #else
 
@@ -3459,7 +3395,6 @@ void irtkReconstructionEbb::EStep() {
     //FORPRINTF("%lf %lf\n", _mean_s_cpu, _mean_s2_cpu);
     
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
     for (int i = 0; i < (int)nids.size(); i++) 
     {
 	auto buf = MakeUniqueIOBuf((1 * sizeof(int)) + (2 * sizeof(double)));
@@ -3472,7 +3407,6 @@ void irtkReconstructionEbb::EStep() {
 	bytesTotal += buf->ComputeChainDataLength();
 	SendMessage(nids[i], std::move(buf));
     }
-#endif
 #endif    
     
     // Calculate the variances of the potentials
@@ -3481,11 +3415,7 @@ void irtkReconstructionEbb::EStep() {
     _ttsum2 = 0;
     _ttden2 = 0;
 
-#ifdef __MNODE__  
     for (inputIndex = _start; inputIndex < _end; inputIndex++)
-#else
-    for (inputIndex = 0; inputIndex < _slices.size(); inputIndex++)
-#endif
     {
 	if (slice_potential[inputIndex] >= 0) 
 	{
@@ -3503,13 +3433,11 @@ void irtkReconstructionEbb::EStep() {
 	}
     }
 
-#ifdef __MNODE__
     FORPRINTF("[H] EStep: Bloacking \n");
     testFuture = ebbrt::Promise<int>();
     auto tf2 = testFuture.GetFuture();
     tf2.Block();
     FORPRINTF("[H] Estep: Returning from future \n");
-#endif
   
     //FORPRINTF("%lf %lf %lf %lf\n", _ttsum, _ttden, _ttsum2, _ttden2);
     //return;
@@ -3540,7 +3468,6 @@ void irtkReconstructionEbb::EStep() {
 
 
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
   for (int i = 0; i < (int)nids.size(); i++) 
   {
       auto buf = MakeUniqueIOBuf((1 * sizeof(int)) + (2 * sizeof(double)));
@@ -3554,7 +3481,6 @@ void irtkReconstructionEbb::EStep() {
       SendMessage(nids[i], std::move(buf));
   }
 #endif
-#endif
 
   // Calculate slice weights
   double gs1, gs2;
@@ -3563,11 +3489,7 @@ void irtkReconstructionEbb::EStep() {
   _ttsum = 0;
   _ttnum = 0;
   
-#ifdef __MNODE__
   for (inputIndex = _start; inputIndex < _end; inputIndex++)
-#else
-  for (inputIndex = 0; inputIndex < _slices.size(); inputIndex++) 
-#endif
 {
     // Slice does not have any voxels in volumetric ROI
     if (slice_potential[inputIndex] == -1) {
@@ -3613,13 +3535,11 @@ void irtkReconstructionEbb::EStep() {
     }
   }
 
-#ifdef __MNODE__
     FORPRINTF("[H] EStep: Bloacking \n");
     testFuture = ebbrt::Promise<int>();
     auto tf3 = testFuture.GetFuture();
     tf3.Block();
     FORPRINTF("[H] Estep: Returning from future \n");
-#endif
     
     if (_ttnum > 0)
 	_mix_s_cpu = _ttsum / _ttnum;
@@ -3690,7 +3610,6 @@ public:
 void irtkReconstructionEbb::Scale() {
     //FORPRINTF("In Scale()\n");
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
     for (int i = 0; i < (int)nids.size(); i++) 
     {
        auto buf = MakeUniqueIOBuf(1 * sizeof(int));
@@ -3709,11 +3628,6 @@ void irtkReconstructionEbb::Scale() {
     auto tf = testFuture.GetFuture();
     tf.Block();
     FORPRINTF("[H] Scale: Returning from future \n");
-#else
-    ParallelScale scale(this, _numThreads, 0, _slices.size());
-    scale();
-    //FORPRINTF("Scale() : _scale_cpu = %lf\n", sumVec(_scale_cpu));
-#endif    
 #else
     
     /*size_t ncpus = ebbrt::Cpu::Count();
@@ -4057,7 +3971,6 @@ void irtkReconstructionEbb::Superresolution(int iter) {
   original = _reconstructed;
 
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__ 
   for (int i = 0; i < (int)nids.size(); i++) 
   {
       auto buf = MakeUniqueIOBuf(2 * sizeof(int));
@@ -4080,13 +3993,6 @@ void irtkReconstructionEbb::Superresolution(int iter) {
   auto tf = testFuture.GetFuture();
   tf.Block();
   FORPRINTF("[H] ParallelSuperRedolution: Returning from future \n");
-
-#else
-  ParallelSuperresolution parallelSuperresolution(this, _numThreads, 0, _slices.size());
-  parallelSuperresolution();
-  _addon = parallelSuperresolution.addon;
-  _confidence_map = parallelSuperresolution.confidence_map;
-#endif
 #else
 
   if(iter == 1)
@@ -4302,8 +4208,6 @@ public:
 
 void irtkReconstructionEbb::MStep(int iter) {
 #ifndef __EBBRT_BM__
-#ifdef __MNODE__
-
     for (int i = 0; i < (int)nids.size(); i++) 
     {
 	auto buf = MakeUniqueIOBuf((2 * sizeof(int)));
@@ -4330,18 +4234,6 @@ void irtkReconstructionEbb::MStep(int iter) {
     auto tf = testFuture.GetFuture();
     tf.Block();
     FORPRINTF("[H] MStep: Returning from future \n");
-    
-#else
-    
-    ParallelMStep parallelMStep(this, _numThreads, 0, _slices.size());
-    parallelMStep();
-  
-    _msigma = parallelMStep.sigma;
-    _mmix = parallelMStep.mix;
-    _mnum = parallelMStep.num;
-    _mmin = parallelMStep.min;
-    _mmax = parallelMStep.max;
-#endif
 #else
   _msigma = 0;
   _mmix = 0;
