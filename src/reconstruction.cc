@@ -79,8 +79,6 @@ const std::string currentDateTime() {
 }
 
 void AppMain() {
-  struct timeval totstart, totend;
-  gettimeofday(&totstart, NULL);
   int i, ok;
   char buffer[256];
   irtkRealImage stack;
@@ -358,13 +356,11 @@ void AppMain() {
   reconstruction->setNumThreads(numThreads);
   reconstruction->setNumNodes(numNodes);
 
+  struct timeval totstart;
+  gettimeofday(&totstart, NULL);
 
   auto bindir = boost::filesystem::system_complete(ARGV[0]).parent_path() /
                 "/bm/reconstruction.elf32";
-
-  struct timeval allocation_time_start;
-
-  gettimeofday(&allocation_time_start, NULL);
 
   try {
     ebbrt::pool_allocator->AllocatePool(bindir.string(), numNodes);
@@ -372,22 +368,17 @@ void AppMain() {
     std::cerr << e.what() << std::endl;
     exit(EXIT_FAILURE);
   }
-  
-  // Initialize Pool futures
-  for (unsigned int i=0 ; i < numNodes; i++) {
-    pool_allocator->pool_futures.push_back(Promise<int>());
-  }
-  
-  for (unsigned int i=0 ; i < numNodes; i++) {
-    // Waiting for Future
-    auto nf = pool_allocator->pool_futures[i].GetFuture();
-    nf.Block();
-    pool_allocator->node_descriptors_[i].NetworkId().Then([reconstruction, i, numNodes, allocation_time_start](Future<Messenger::NetworkId> f) {
-        auto nid = f.Get();
-        reconstruction->addNid(nid);
-    });
-  }
 
+  pool_allocator->waitPool().Then(
+    [reconstruction, iterations, numNodes, totstart](ebbrt::Future<void> f) {
+    f.Get();
+    // Store the nids into reconstruction object
+    for (int i=0; i < numNodes; i++) {
+      auto nid = pool_allocator->GetNidAt(i);
+      reconstruction->addNid(nid);
+    }
+  });
+  
   if (useSINCPSF) {
     reconstruction->useSINCPSF();
   }
@@ -605,24 +596,22 @@ void AppMain() {
 //  useCPU, disableBiasCorr, sigma, global_bias_correction, lastIterLambda,
 //  iterations, levels);
 
-
-  reconstruction->waitNodes().Then(
-      [reconstruction, iterations](ebbrt::Future<void> f) {
-        f.Get();
-        std::cout << "All nodes initialized" << std::endl;
-        ebbrt::event_manager->Spawn([reconstruction, iterations]() {
-          reconstruction->SendRecon(iterations);
-        });
+  reconstruction->waitPool().Then(
+    [reconstruction, iterations](ebbrt::Future<void> f) {
+      f.Get();
+      // Spawn work to backends
+      ebbrt::event_manager->Spawn([reconstruction, iterations]() {
+        reconstruction->SendRecon(iterations);
       });
+    });
 
   reconstruction->waitReceive().Then([totstart](ebbrt::Future<void> f) {
     f.Get();
     struct timeval totend;
     gettimeofday(&totend, NULL);
-    std::printf("tTotal time: %lf seconds\n",
+    std::printf("Total time: %lf seconds\n",
       (totend.tv_sec - totstart.tv_sec) +
       ((totend.tv_usec - totstart.tv_usec) / 1000000.0));
-    printf("EBBRT ends\n");
     ebbrt::Cpu::Exit(0);
   });
   
@@ -638,12 +627,12 @@ int main(int argc, char **argv) {
   
   try {
     po::options_description desc("Options");
+    // Get the number of front end cpus
     desc.add_options()("help,h", "Print usage messages")
     ("numFrontEndCpus", po::value<int>(&numFrontEndCpus)->default_value(1));
-  
     po::variables_map vm;
-
     try {
+      // Ignore all other options
       po::store(po::command_line_parser(argc, argv).options(desc).allow_unregistered().run(), vm);
       po::notify(vm);
     } catch (po::error &e) {

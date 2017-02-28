@@ -759,7 +759,7 @@ void irtkReconstructionEbb::addNid(ebbrt::Messenger::NetworkId nid) {
   }
 }
 
-ebbrt::Future<void> irtkReconstructionEbb::waitNodes() {
+ebbrt::Future<void> irtkReconstructionEbb::waitPool() {
   return std::move(nodesinit.GetFuture());
 }
 

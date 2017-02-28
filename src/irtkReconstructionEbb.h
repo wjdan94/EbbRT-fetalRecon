@@ -304,7 +304,7 @@ public:
   void setNumNodes(int i);
   void setNumThreads(int i);
   void addNid(ebbrt::Messenger::NetworkId nid);
-  ebbrt::Future<void> waitNodes();
+  ebbrt::Future<void> waitPool();
   ebbrt::Future<void> waitReceive();
 
   void CenterStacks(vector<irtkRealImage>& stacks,
