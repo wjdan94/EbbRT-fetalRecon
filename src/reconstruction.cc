@@ -35,7 +35,6 @@
 #include <ebbrt/hosted/ContextActivation.h>
 #include <ebbrt/hosted/GlobalIdMap.h>
 #include <ebbrt/hosted/NodeAllocator.h>
-#include <ebbrt/hosted/PoolAllocator.h>
 
 #include <ebbrt/hosted/Runtime.h>
 #include <ebbrt/hosted/StaticIds.h>
@@ -341,25 +340,6 @@ void AppMain() {
   struct timeval start;
   gettimeofday(&start, NULL);
 
-  auto bindir = boost::filesystem::system_complete(EXEC_NAME).parent_path() /
-                "/bm/reconstruction.elf32";
-
-  try {
-    ebbrt::pool_allocator->AllocatePool(bindir.string(), PARAMETERS.numBackendNodes);
-  } catch (std::runtime_error& e) {
-    std::cerr << e.what() << std::endl;
-    ebbrt::Cpu::Exit(EXIT_FAILURE);
-  }
-
-  pool_allocator->waitPool().Then(
-    [reconstruction](ebbrt::Future<void> f) {
-    f.Get();
-    // Store the nids into reconstruction object
-    for (int i=0; i < PARAMETERS.numBackendNodes; i++) {
-      auto nid = pool_allocator->GetNidAt(i);
-      reconstruction->addNid(nid);
-    }
-  });
   
   if (PARAMETERS.useSINCPSF) {
     reconstruction->useSINCPSF();
@@ -509,6 +489,17 @@ void AppMain() {
 
   // Initialise data structures for EM
   reconstruction->InitializeEM();
+  
+  auto bindir = boost::filesystem::system_complete(EXEC_NAME).parent_path() /
+                "/bm/reconstruction.elf32";
+
+  for (int i = 0; i < PARAMETERS.numBackendNodes; i++) {
+    auto node_desc = node_allocator->AllocateNode(bindir.string(), PARAMETERS.numThreads, 1, 32);
+    node_desc.NetworkId().Then([reconstruction](Future<Messenger::NetworkId> f) {
+        auto nid = f.Get();
+        reconstruction->addNid(nid);
+    });
+  }
 
   reconstruction->waitPool().Then(
     [reconstruction](ebbrt::Future<void> f) {
