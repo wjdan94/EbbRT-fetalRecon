@@ -7,7 +7,8 @@
 
 #include "reconstruction.h"
 
-#include <irtkRegistration.h> //this header needs to be at top else compilation error
+//this header needs to be at top else compilation error
+#include <irtkRegistration.h> 
 #include <irtkImageFunction.h>
 
 #include <irtkImageRigidRegistration.h>
@@ -207,16 +208,10 @@ void calculateTotalTime(struct timeval start) {
 
 void AppMain() {
   irtkRealImage stack;
-  /// Slice stacks
   vector<irtkRealImage> stacks;
-  /// Stack transformation
   vector<irtkRigidTransformation> stack_transformations;
-  /// number of stacks
   int nStacks;
 
-  vector<float> stackMotion;
-
-  // Default values.
   int templateNumber = -1;
   irtkRealImage *mask = NULL;
   irtkRealImage average;
@@ -312,8 +307,6 @@ void AppMain() {
     }
   }
 
-  std::vector<double> samplingUcert;
-
   // Set debug mode
   reconstruction->SetDebug(PARAMETERS.debug);
 
@@ -354,15 +347,6 @@ void AppMain() {
       m.Write("maskTemplate.nii.gz");
       stacks[templateNumber].Write("croppedTemplate.nii.gz");
     }
-  }
-
-  std::vector<uint3> stack_sizes;
-  uint3 temp; 
-  for (int i = 0; i < stacks.size(); i++) {
-    temp.x = stacks[i].GetX();
-    temp.y = stacks[i].GetY();
-    temp.z = stacks[i].GetZ();
-    stack_sizes.push_back(temp);
   }
 
   // Create template volume with isotropic resolution
