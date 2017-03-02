@@ -5,15 +5,7 @@
 #define NOMINMAX
 #define _USE_MATH_DEFINES
 
-#include <math.h>
-#include <stdlib.h>
-//#include "../../src/utils.h"
-#include <chrono>
-#include <signal.h>
-#include <string>
-#include <thread>
-
-#include "irtkReconstructionEbb.h"
+#include "reconstruction.h"
 
 #include <irtkRegistration.h> //this header needs to be at top else compilation error
 #include <irtkImageFunction.h>
@@ -23,69 +15,13 @@
 #include <irtkResampling.h>
 #include <irtkTransformation.h>
 
-#include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
-
 #include <ebbrt/Cpu.h>
-#include <ebbrt/hosted/GlobalIdMap.h>
 #include <ebbrt/hosted/PoolAllocator.h>
-#include <ebbrt/hosted/StaticIds.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
-
-using namespace ebbrt;
-
-namespace po = boost::program_options;
-
-struct parameters {
-  string outputName; 
-  string maskName;
-  string referenceVolumeName;
-  vector<string> inputStacks;
-  vector<string> inputTransformations;
-  vector<double> thickness;
-  vector<int> packages;
-  int iterations; 
-  double sigma;
-  double resolution;
-  int levels;
-  double averageValue;
-  double delta;
-  double lambda;
-  double lastIterLambda;
-  double smoothMask;
-  bool globalBiasCorrection;
-  double lowIntensityCutoff;
-  vector<int> forceExcluded;
-  bool intensityMatching;
-  string logId;
-  bool debug;
-  bool debugGPU;
-  int recIterationsFirst;
-  int recIterationsLast;
-  unsigned int numInputStacksTuner;
-  bool noLog;
-  vector<int> devicesToUse;
-  string tFolder;
-  string sFolder;
-  unsigned int T1PackageSize;
-  unsigned int numDevicesToUse;
-  bool useCPU;
-  bool useCPUReg;
-  bool useGPUReg;
-  bool useAutoTemplate;
-  bool useSINCPSF;
-  bool disableBiasCorr;
-  int numThreads;
-  int numBackendNodes;
-  int numFrontendCPUs;
-};
-
-char *EXEC_NAME;
-struct parameters PARAMETERS;
 
 void parseInputParameters(int argc, char **argv) {
   try {
@@ -166,9 +102,6 @@ void parseInputParameters(int argc, char **argv) {
       ("debug", 
         po::value<bool>(&PARAMETERS.debug)->default_value(false),
         "Debug mode - save intermediate results.")
-      ("debugGPU", 
-        po::bool_switch(&PARAMETERS.debugGPU)->default_value(false),
-        "Debug only GPU results.")
       ("recIterationsFirst",
         po::value<int>(&PARAMETERS.recIterationsFirst)->default_value(4),
         "Set number of superresolution iterations")
