@@ -15,10 +15,8 @@
 
 #include "irtkReconstructionEbb.h"
 
-#if 1
 #include <irtkRegistration.h> //this header needs to be at top else compilation error
 #include <irtkImageFunction.h>
-#endif
 
 #include <irtkImageRigidRegistration.h>
 #include <irtkImageRigidRegistrationWithPadding.h>
@@ -29,15 +27,8 @@
 #include <boost/program_options.hpp>
 
 #include <ebbrt/Cpu.h>
-
-#include <ebbrt/hosted/Clock.h>
-#include <ebbrt/hosted/Context.h>
-#include <ebbrt/hosted/ContextActivation.h>
 #include <ebbrt/hosted/GlobalIdMap.h>
-#include <ebbrt/hosted/NodeAllocator.h>
 #include <ebbrt/hosted/PoolAllocator.h>
-
-#include <ebbrt/hosted/Runtime.h>
 #include <ebbrt/hosted/StaticIds.h>
 
 #pragma GCC diagnostic push
@@ -391,10 +382,7 @@ void AppMain() {
   std::vector<double> samplingUcert;
 
   // Set debug mode
-  if (PARAMETERS.debug)
-    reconstruction->DebugOn();
-  else
-    reconstruction->DebugOff();
+  reconstruction->SetDebug(PARAMETERS.debug);
 
   // Set force excluded slices
   reconstruction->SetForceExcludedSlices(PARAMETERS.forceExcluded);

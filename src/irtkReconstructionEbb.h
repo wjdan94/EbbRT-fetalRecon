@@ -114,7 +114,6 @@ public:
   /// Flag to say whether the template volume has been created
   bool _template_created;
 
-
   //pointers for messsage
   int* gaussreconptr = NULL;
   double* gaussreconptr2 = NULL;
@@ -210,7 +209,6 @@ public:
   ///Debug mode
   bool _debug;
 
-
   //Probability density functions
   ///Zero-mean Gaussian PDF
   inline double G(double x, double s);
@@ -219,11 +217,8 @@ public:
 
   int _directions[13][3];
 
-  //Reconstruction* reconstructionGPU;
-
   bool _useCPUReg;
   bool _useCPU;
-  bool _debugGPU;
 
   static ebbrt::EbbRef<irtkReconstructionEbb>
   Create(ebbrt::EbbId id = ebbrt::ebb_allocator->Allocate());
@@ -249,20 +244,16 @@ public:
 
   //Structures to store the matrix of transformation between volume and slices
   std::vector<SLICECOEFFS> _volcoeffs;
-  //std::vector<std::vector<std::vector<std::vector<SLICEINFO> > > >_invertvolcoeffs;
   std::vector<std::vector<std::vector<std::vector<std::vector<SLICEINFO> > > > >_invertvolcoeffs;
 
   vector<irtkRealImage> _slices;
-  //vector<irtkRealImage> _test_slices;
   irtkRealImage _reconstructed;
   irtkRealImage _reconstructed_temp;
   vector<irtkRigidTransformation> _transformations;
   vector<double> _slices_regCertainty;
-  //vector<bool> _slice_inside_cpu;
   vector<int> _slice_inside_cpu;
 
-  //SLICES
-  /// Slices
+  // Slices
   vector<irtkRealImage> _simulated_slices;
   vector<irtkRealImage> _simulated_weights;
   vector<irtkRealImage> _simulated_inside;
@@ -395,7 +386,6 @@ public:
   void Bias();
   void NormaliseBias(int iter);
   
-  
   ///Superresolution
   void Superresolution(int iter);
 
@@ -421,7 +411,6 @@ public:
   ///Mask the volume
   void MaskVolume();
   void MaskImage(irtkRealImage& image, double padding = -1);
-
 
   ///Save slices
   void SaveSlices();
@@ -478,12 +467,8 @@ public:
   ///Set slices which need to be excluded by default
   inline void SetForceExcludedSlices(vector<int>& force_excluded);
 
-
   //utility
-  ///Save intermediate results
-  inline void DebugOn();
-  ///Do not save intermediate results
-  inline void DebugOff();
+  inline void SetDebug(bool debug);
 
   inline void UseAdaptiveRegularisation();
 
@@ -494,7 +479,7 @@ public:
   void ReadTransformation(char* folder);
 
   /// Read and replace Slices
-//  void replaceSlices(string folder);
+  //  void replaceSlices(string folder);
 
   //To recover original scaling
   ///Restore slice intensities to their original values
@@ -569,10 +554,9 @@ inline irtkRealImage irtkReconstructionEbb::GetMask()
   return _mask;
 }
 
-inline void irtkReconstructionEbb::DebugOn()
+inline void irtkReconstructionEbb::SetDebug(bool debug)
 {
-  _debug = true;
-//  cout << "Debug mode." << endl;
+  _debug = debug;
 }
 
 inline void irtkReconstructionEbb::UseAdaptiveRegularisation()
@@ -580,22 +564,15 @@ inline void irtkReconstructionEbb::UseAdaptiveRegularisation()
   _adaptive = true;
 }
 
-inline void irtkReconstructionEbb::DebugOff()
-{
-  _debug = false;
-}
-
 inline void irtkReconstructionEbb::SetSigma(double sigma)
 {
   _sigma_bias = sigma;
-  //cout << "_sigma_bias = " << sigma << endl;
 }
 
 inline void irtkReconstructionEbb::useSINCPSF()
 {
   _use_SINC = true;
 }
-
 
 inline void irtkReconstructionEbb::SpeedupOn()
 {
@@ -610,13 +587,11 @@ inline void irtkReconstructionEbb::SpeedupOff()
 inline void irtkReconstructionEbb::GlobalBiasCorrectionOn()
 {
   _global_bias_correction = true;
-//  cout << "_global_bias_correction = true " << endl;
 }
 
 inline void irtkReconstructionEbb::GlobalBiasCorrectionOff()
 {
   _global_bias_correction = false;
-//  cout << "_global_bias_correction = false " << endl;
 }
 
 inline void irtkReconstructionEbb::SetLowIntensityCutoff(double cutoff)
@@ -624,9 +599,7 @@ inline void irtkReconstructionEbb::SetLowIntensityCutoff(double cutoff)
   if (cutoff > 1) cutoff = 1;
   if (cutoff < 0) cutoff = 0;
   _low_intensity_cutoff = cutoff;
-  //cout<<"Setting low intensity cutoff for bias correction to "<<_low_intensity_cutoff<<" of the maximum intensity."<<endl;
 }
-
 
 inline void irtkReconstructionEbb::SetSmoothingParameters(double delta, double lambda)
 {
@@ -634,7 +607,6 @@ inline void irtkReconstructionEbb::SetSmoothingParameters(double delta, double l
   _lambda = lambda*delta*delta;
   _alpha = 0.05 / lambda;
   if (_alpha > 1) _alpha = 1;
-  //cout << "_delta = " << _delta << " _lambda = " << _lambda << " _alpha = " << _alpha << endl;
 }
 
 inline void irtkReconstructionEbb::SetForceExcludedSlices(vector<int>& force_excluded)
