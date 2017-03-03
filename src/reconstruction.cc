@@ -198,12 +198,12 @@ void parseInputParameters(int argc, char **argv) {
   }
 }
 
-void calculateTotalTime(struct timeval start) {
+void calculateTotalTime(struct timeval start, string tag) {
   struct timeval end;
   gettimeofday(&end, NULL);
-  std::printf("Total time: %lf seconds\n",
-      (end.tv_sec - start.tv_sec) +
-      ((end.tv_usec - start.tv_usec) / 1000000.0));
+  auto time = (end.tv_sec - start.tv_sec) + 
+      ((end.tv_usec - start.tv_usec) / 1000000.0);
+  std::cout << "Total " << tag << " time: " << time << std::endl; 
 }
 
 void AppMain() {
@@ -279,6 +279,9 @@ void AppMain() {
       reconstruction->addNid(nid);
     }
   });
+
+  struct timeval frontend_start;
+  gettimeofday(&frontend_start, NULL);
   
   if (PARAMETERS.useSINCPSF) {
     reconstruction->useSINCPSF();
@@ -415,6 +418,8 @@ void AppMain() {
   // Initialise data structures for EM
   reconstruction->InitializeEM();
 
+  calculateTotalTime(frontend_start, "frontend");
+
   reconstruction->waitPool().Then(
     [reconstruction](ebbrt::Future<void> f) {
       f.Get();
@@ -426,7 +431,7 @@ void AppMain() {
 
   reconstruction->waitReceive().Then([start](ebbrt::Future<void> f) {
     f.Get();
-    calculateTotalTime(start);
+    calculateTotalTime(start, "");
     ebbrt::Cpu::Exit(EXIT_SUCCESS);
   });
 }
