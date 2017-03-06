@@ -4,8 +4,6 @@ set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g3")
 set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE        "-O4 -flto -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g3")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++14 -Wall -Werror -DHAS_NIFTI -DHAS_TBB -Wno-unused-but-set-variable -Wno-unused-result -Wno-unused-label -Wno-unused-function -DHAVE_INLINE")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++14 -Wall -Werror -DHAS_NIFTI -DHAS_TBB -D__MNODE__ -DHAVE_INLINE")
 
 set(IRTK_SOURCE_DIR IRTKSimple2/)
 
@@ -116,17 +114,17 @@ set(IRTK_ZNZ_SRC
 )
 
 set(BAREMETAL_SOURCES
-  src/irtkReconstructionEbb.cc
+  src/baremetal/irtkReconstruction.cc
 )
 
-set(BAREMETAL_INCLUDES
-  src
-
-)
+# set(BAREMETAL_INCLUDES
+#  src/baremetal
+#
+# ) 
 
 set(HOSTED_SOURCES
-  src/reconstruction.cc
-  src/irtkReconstructionEbb.cc
+  src/hosted/reconstruction.cc
+  src/hosted/irtkReconstruction.cc
 )
 
 set(EXT
@@ -168,7 +166,6 @@ elseif( ${CMAKE_SYSTEM_NAME} STREQUAL "Linux" )
 
   set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++14 -Wall -Werror -D__EBB__ -DHAS_NIFTI -DHAS_TBB -DHAVE_INLINE -D__MNODE__ -Wno-unused-but-set-variable -Wno-unused-result -Wno-unused-label -Wno-unused-function")
-  #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++14 -Wall -Werror -D__EBB__ -DHAS_NIFTI -DHAS_TBB -DHAVE_INLINE -Wno-unused-but-set-variable -Wno-unused-result -Wno-unused-label -Wno-unused-function")
 
   find_package(EbbRT REQUIRED)
   find_package(Boost 1.53.0 REQUIRED COMPONENTS
@@ -179,9 +176,6 @@ elseif( ${CMAKE_SYSTEM_NAME} STREQUAL "Linux" )
  
   FIND_PACKAGE(GSL REQUIRED)
   include_directories(${GSL_INCLUDE_DIRS} ${GSLCBLAS_INCLUDE_DIRS})
-  #set(GSLLIBS ${LIBS} ${GSL_LIBRARIES} ${GSLCBLAS_LIBRARIES})
-
-  #SUBDIRS(${IRTK_SOURCE_DIR}/common++/src ${IRTK_SOURCE_DIR}/geometry++/src ${IRTK_SOURCE_DIR}/image++/src ${IRTK_SOURCE_DIR}/contrib++/src ${IRTK_SOURCE_DIR}/packages)
 
   INCLUDE_DIRECTORIES(${IRTK_SOURCE_DIR}/common++/include)
   INCLUDE_DIRECTORIES(${IRTK_SOURCE_DIR}/geometry++/include)
