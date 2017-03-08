@@ -10,7 +10,7 @@
 
 using namespace std;
 
-struct parameters {
+struct arguments {
   string outputName; 
   string maskName;
   string referenceVolumeName;

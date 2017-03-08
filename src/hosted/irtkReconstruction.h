@@ -25,6 +25,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     // EbbRT-related parameters
     std::vector<ebbrt::Messenger::NetworkId> _nids;
+    ebbrt::Promise<void> _backendsAllocated;
 
     // Input parameters
     string _outputName;  // Not used
@@ -73,9 +74,29 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     bool _disableBiasCorr; // Not used
 
     // Internal parameters
+    irtkRealImage _externalRegistrationTargetImage;
+    irtkRealImage _reconstructed;
+    irtkRealImage _mask;
+
+    vector<double> _scaleCPU;
+    vector<double> _sliceWeightCPU;
+    vector<double> _slicePotential;
+
+    vector<float> _stackFactor;
+
+    vector<int> _stackIndex;
+
+    vector<irtkRigidTransformation> _transformations;
+
+    vector<irtkRealImage> _slices;
+    vector<irtkRealImage> _simulatedSlices;
+    vector<irtkRealImage> _simulatedInside;
+    vector<irtkRealImage> _simulatedWeights;
+    vector<irtkRealImage> _weights;
+    vector<irtkRealImage> _bias;
+
     int _directions[13][3];
 
-    int _qualityFactor;
     int _sigmaBias;
     int _reconRecv;
     int _tsigma;
@@ -83,6 +104,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     int _tnum;
     int _totalBytes;
 
+    double _qualityFactor;
     double _step; 
     double _sigmaSCpu;
     double _sigmaS2Cpu;
@@ -91,6 +113,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     double _alpha;
     double _tmin;
     double _tmax;
+    double _maxIntensity;
+    double _minIntensity;
 
     bool _templateCreated;
     bool _haveMask;
@@ -113,8 +137,106 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void ReceiveMessage(ebbrt::Messenger::NetworkId nid,
         std::unique_ptr<ebbrt::IOBuf>&& buffer);
 
-    // Reconstruction functions
-    void setParameters(parameters p);
+    // Node allocation functions
+    void AddNid(ebbrt::Messenger::NetworkId nid);
 
-    void setDefaultParameters();
+    // Reconstruction functions
+    void SetParameters(arguments args);
+
+    void SetDefaultParameters();
+
+    irtkRealImage CreateMask(irtkRealImage image);
+
+    void TransformMask(irtkRealImage& image,
+        irtkRealImage& mask,
+        irtkRigidTransformation& transformation);
+
+    void CropImage(irtkRealImage& image,
+        irtkRealImage& mask);
+
+    void InvertStackTransformations(
+        vector<irtkRigidTransformation>& stack_transformations);
+
+    double CreateTemplate(irtkRealImage stack,
+        double resolution = 0);
+
+    irtkRealImage GetMask();
+
+    void SetMask(irtkRealImage * mask, double sigma, double threshold = 0.5);
+
+    void StackRegistrations(vector<irtkRealImage>& stacks,
+        vector<irtkRigidTransformation>& stack_transformations,
+        int templateNumber, bool useExternalTarget = false);
+
+    irtkRealImage CreateAverage(vector<irtkRealImage>& stacks,
+        vector<irtkRigidTransformation>& stack_transformations);
+
+    void MatchStackIntensitiesWithMasking(vector<irtkRealImage>& stacks,
+        vector<irtkRigidTransformation>& stack_transformations,
+        double averageValue,
+        bool together = false);
+
+    void CreateSlicesAndTransformations(vector<irtkRealImage>& stacks,
+        vector<irtkRigidTransformation>& stack_transformations,
+        vector<double>& thickness,
+        const vector<irtkRealImage> &probability_maps = vector<irtkRealImage>());
+
+    void MaskSlices();
+
+    void ReadTransformation(char* folder);
+
+    void InitializeEM();
+
+    // Static Reconstruction functions
+    static void ResetOrigin(irtkGreyImage &image, 
+        irtkRigidTransformation& transformation);
+
+    // For debugging purposes
+    inline double SumImage(irtkRealImage img);
+
+    inline void PrintImageSums();
+
+    inline void PrintVectorSums(vector<irtkRealImage> images, string name);
+
+    inline void PrintAttributeVectorSums();
 };
+
+inline double irtkReconstruction::SumImage(irtkRealImage img) {
+  float sum = 0.0;
+  irtkRealPixel *ap = img.GetPointerToVoxels();
+
+  for (int j = 0; j < img.GetNumberOfVoxels(); j++) {
+      sum += (float)*ap;
+    ap++;
+  }
+  return (double)sum;
+}
+
+inline void irtkReconstruction::PrintImageSums() {
+  /*
+  cout << "_externalRegistrationTargetImage: " 
+       << SumImage(_externalRegistrationTargetImage) << endl; 
+  */
+
+  cout << "_reconstructed: " 
+       << SumImage(_reconstructed) << endl;
+
+  cout << "_mask: "
+       << SumImage(_mask) << endl;
+}
+
+inline void irtkReconstruction::PrintVectorSums(vector<irtkRealImage> images, 
+    string name) {
+  for (int i = 0; i < (int) images.size(); i++) {
+    cout << fixed << name << "[" << i << "]: " << SumImage(images[i]) << endl;
+  }
+}
+
+inline void irtkReconstruction::PrintAttributeVectorSums() {
+  PrintVectorSums(_slices, "slices");
+  PrintVectorSums(_simulatedSlices, "simulatedSlices");
+  PrintVectorSums(_simulatedInside, "simulatedInside");
+  PrintVectorSums(_simulatedWeights, "simulatedWeights");
+  PrintVectorSums(_weights, "weights");
+  PrintVectorSums(_bias, "bias");
+}

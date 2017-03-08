@@ -5,6 +5,8 @@
 //
 #include "common.h"
 
+#include "irtkReconstruction.h"
+
 #include <ebbrt/Cpu.h>
 #include <ebbrt/hosted/PoolAllocator.h>
 
@@ -16,6 +18,38 @@ using namespace std;
 
 namespace po = boost::program_options;
 
-struct parameters PARAMETERS;
+struct arguments ARGUMENTS;
 
 char *EXEC_NAME;
+
+void parseInputParameters(int argc, char **argv);
+
+vector<irtkRigidTransformation> getTransformations(int* templateNumber);
+
+vector<irtkRealImage> getStacks(EbbRef<irtkReconstruction> reconstruction);
+
+void allocateBackends(EbbRef<irtkReconstruction> reconstruction);
+
+void initializeThikness(vector<irtkRealImage> stacks);
+
+irtkRealImage* getMask(EbbRef<irtkReconstruction> reconstruction,
+    vector<irtkRealImage> stacks, 
+    vector<irtkRigidTransformation>& stackTransformations,
+    int templateNumber);
+
+void applyMask(EbbRef<irtkReconstruction> reconstruction,
+    vector<irtkRealImage>& stacks, 
+    vector<irtkRigidTransformation>& stackTransformations,
+    int templateNumber);
+
+void volumetricRegistration(EbbRef<irtkReconstruction> reconstruction,
+    vector<irtkRealImage> stacks, 
+    vector<irtkRigidTransformation>& stackTransformations,
+    int templateNumber);
+
+void eraseInputStackTuner(vector<irtkRealImage> stacks, 
+    vector<irtkRigidTransformation>& stackTransformations);
+
+void AppMain();
+
+int main(int argc, char **argv);
