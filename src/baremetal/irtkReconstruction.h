@@ -33,6 +33,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     // Input parameters
 
     int _numThreads;
+    int _start;
+    int _end;
 
     double _delta; 
     double _lambda; 
@@ -70,6 +72,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     vector<int> _stackIndex;
     vector<int> _sliceInsideCPU;
+    vector<int> _smallSlices;
 
     irtkRealImage _reconstructed;
     irtkRealImage _mask;
@@ -102,7 +105,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void ParallelCoeffInit(int start, int end);
 
-    void ReturnFromCoeffInit(ebbrt::Messenger::NetworkId frontEndNid);
+    void ReturnFrom(int fn, ebbrt::Messenger::NetworkId frontEndNid);
 
     void StoreParameters(struct reconstructionParameters parameters);
 
@@ -112,6 +115,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void InitializeEMValues();
 
     void InitializeEM();
+
+    void GaussianReconstruction();
 
     // Deserializer functions
     void DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp);

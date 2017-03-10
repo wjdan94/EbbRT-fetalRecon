@@ -164,7 +164,7 @@ void irtkReconstruction::SetParameters(arguments args) {
   _disableBiasCorr = args.disableBiasCorr; // Not used
 }
 
-void irtkReconstruction::ReturnFromCoeffInit() {
+void irtkReconstruction::ReturnFrom() {
   _received++;
   if (_received == _numBackendNodes) {
     _received = 0;
@@ -182,7 +182,12 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
   switch(fn) {
     case COEFF_INIT: 
       {
-        ReturnFromCoeffInit();
+        ReturnFrom();
+        break;
+      }
+    case GAUSSIAN_RECONSTRUCTION:
+      {
+        ReturnFrom();
         break;
       }
     default:
@@ -902,14 +907,13 @@ void irtkReconstruction::Execute() {
     InitializeEMValues();
 
     CoeffInit(it);
+
+    GaussianReconstruction();
   }
 }
 
-struct coeffInitParameters irtkReconstruction::createCoeffInitParameters(
-    int start, int end) {
+struct coeffInitParameters irtkReconstruction::createCoeffInitParameters() {
   struct coeffInitParameters parameters;
-  parameters.start = start;
-  parameters.end = end;
   parameters.debug = _debug;
   parameters.stackFactor = _stackFactor.size();
   parameters.stackIndex = _stackIndex.size();
@@ -922,7 +926,7 @@ struct coeffInitParameters irtkReconstruction::createCoeffInitParameters(
 }
 
 struct reconstructionParameters 
-    irtkReconstruction::CreateReconstructionParameters() {
+    irtkReconstruction::CreateReconstructionParameters(int start, int end) {
   struct reconstructionParameters parameters;
 
   parameters.globalBiasCorrection = _globalBiasCorrection;
@@ -935,6 +939,8 @@ struct reconstructionParameters
   parameters.mixCPU = _mixCPU;
   parameters.lowIntensityCutoff = _lowIntensityCutoff;
   parameters.numThreads = _numThreads;
+  parameters.start = start;
+  parameters.end = end;
 
   for (int i = 0; i < 13; i++)
     for (int j = 0; j < 3; j++)
@@ -961,9 +967,8 @@ void irtkReconstruction::CoeffInit(int iteration) {
       end = i * factor + factor;
       end = (end > diff) ? diff : end;
 
-      auto parameters = createCoeffInitParameters(start, end);
-      parameters.iteration = it;
-      auto reconstructionParameters = CreateReconstructionParameters();
+      auto parameters = createCoeffInitParameters();
+      auto reconstructionParameters = CreateReconstructionParameters(start, end);
 
       auto buf = MakeUniqueIOBuf(sizeof(int) + 
           sizeof(struct coeffInitParameters) +
@@ -1011,6 +1016,26 @@ void irtkReconstruction::CoeffInit(int iteration) {
   f.Block();
   if (_debug)
     cout << "CoeffInit(): Returned from future" << endl;
+}
+
+void irtkReconstruction::GaussianReconstruction() {
+    for (int i = 0; i < (int) _nids.size(); i++) {
+      auto buf = MakeUniqueIOBuf(1 * sizeof(int));
+      auto dp = buf->GetMutDataPointer();
+      dp.Get<int>() = 1;
+
+      _totalBytes += buf->ComputeChainDataLength();
+      SendMessage(_nids[i], std::move(buf));
+    }
+
+    _future = ebbrt::Promise<int>();
+    auto f = _future.GetFuture();
+    if (_debug)
+      cout << "GaussianReconstruction(): Blocking" << endl;
+
+    f.Block();
+    if (_debug)
+      cout << "GaussianReconstruction(): Returned from future" << endl;
 }
 
 unique_ptr<ebbrt::MutUniqueIOBuf> SerializeImageAttr(irtkRealImage ri) {

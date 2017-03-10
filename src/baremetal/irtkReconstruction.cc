@@ -73,8 +73,6 @@ ebbrt::Future<void> irtkReconstruction::Ping(Messenger::NetworkId nid) {
 
 void printCoeffInitParameters(struct coeffInitParameters parameters) {
   cout << "CoeffInit() Parameters: " << endl;
-  cout << "start: " << parameters.start << endl;
-  cout << "end: " << parameters.end << endl;
   cout << "stackFactor: " << parameters.stackFactor << endl;
   cout << "stackIndex: " << parameters.stackIndex << endl;
   cout << "delta: " << parameters.delta << endl;
@@ -85,6 +83,8 @@ void printCoeffInitParameters(struct coeffInitParameters parameters) {
 
 void printReconstructionParameters(struct reconstructionParameters parameters) {
   cout << "Global Bias Correction: " << parameters.globalBiasCorrection << endl;
+  cout << "start: " << parameters.start << endl;
+  cout << "end: " << parameters.end << endl;
   cout << "Adaptive: " << parameters.adaptive << endl;
   cout << "Sigma Bias: " << parameters.sigmaBias << endl;
   cout << "Step: " << parameters.step << endl;
@@ -107,6 +107,8 @@ void irtkReconstruction::StoreParameters(
   _mixCPU = parameters.mixCPU;
   _lowIntensityCutoff = parameters.lowIntensityCutoff;
   _numThreads = parameters.numThreads;
+  _start = parameters.start;
+  _end = parameters.end;
 
   for (int i = 0; i < 13; i++)
     for (int j = 0; j < 3; j++)
@@ -487,7 +489,7 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
   _sliceInsideCPU.clear();
   _sliceInsideCPU.resize(_slices.size());
 
-  int diff = parameters.end - parameters.start;
+  int diff = _end - _start;
 
   //cout << "nCPUs: " << nCPUs << endl;
   //cout << "numThreas: " << _numThreads << endl;
@@ -573,6 +575,76 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
   }
 }
 
+void irtkReconstruction::GaussianReconstruction() {
+  unsigned int inputIndex;
+  int i, j, k, n;
+  irtkRealImage slice;
+  double scale;
+  POINT3D p;
+  vector<int> voxelNum;
+  int sliceVoxNum;
+
+  voxelNum.resize(_end - _start);
+
+  //clear _reconstructed image
+  _reconstructed = 0;
+
+  for (inputIndex = _start; (int) inputIndex < _end; ++inputIndex) {
+    slice = _slices[inputIndex];
+    irtkRealImage& b = _bias[inputIndex];
+    scale = _scaleCPU[inputIndex];
+    sliceVoxNum = 0;
+
+    //Distribute slice intensities to the volume
+    for (i = 0; i < slice.GetX(); i++) {
+      for (j = 0; j < slice.GetY(); j++) {
+        if (slice(i, j, 0) != -1) {
+          //biascorrect and scale the slice
+          slice(i, j, 0) *= exp(-b(i, j, 0)) * scale;
+
+          //number of volume voxels with non-zero coefficients
+          //for current slice voxel
+          n = _volcoeffs[inputIndex][i][j].size();
+
+          //if given voxel is not present in reconstructed volume at all,
+          //pad it
+          if (n > 0)
+            sliceVoxNum++;
+
+          //add contribution of current slice voxel to all voxel volumes
+          //to which it contributes
+          for (k = 0; k < n; k++) {
+            p = _volcoeffs[inputIndex][i][j][k];
+            _reconstructed(p.x, p.y, p.z) += p.value * slice(i, j, 0);
+          }
+        }
+      }
+    }
+    voxelNum[inputIndex - _start] = sliceVoxNum;
+  }
+
+  //normalize the volume by proportion of contributing slice voxels
+  //for each volume voxe
+  _reconstructed /= _volumeWeights;
+
+
+  //TODO: Verify if this must be done at the frontend level
+  vector<int> voxelNumTmp;
+  for (i = 0; i < (int) voxelNum.size(); i++)
+    voxelNumTmp.push_back(voxelNum[i]);
+
+  //find median
+  sort(voxelNumTmp.begin(), voxelNumTmp.end());
+  int median = voxelNumTmp[round(voxelNumTmp.size()*0.5)];
+
+  //remember slices with small overlap with ROI
+  _smallSlices.clear();
+  for (i = 0; i < (int) voxelNum.size(); i++)
+    if (voxelNum[i] < 0.1*median)
+      _smallSlices.push_back(i);
+}
+
+
 void irtkReconstruction::DeserializeTransformations(
     ebbrt::IOBuf::DataPointer& dp, irtkRigidTransformation& tmp) {
   auto tx = dp.Get<double>();
@@ -618,37 +690,13 @@ void irtkReconstruction::DeserializeSliceVector(ebbrt::IOBuf::DataPointer& dp,
   }
 }
 
-void irtkReconstruction::ReturnFromCoeffInit(Messenger::NetworkId frontEndNid) {
+void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
   auto buf = MakeUniqueIOBuf(sizeof(int));
   auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = COEFF_INIT;
+  dp.Get<int>() = fn;
   SendMessage(frontEndNid, std::move(buf));
 }
 
-void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
-    std::unique_ptr<IOBuf> &&buffer) {
-  auto dp = buffer->GetDataPointer();
-  auto fn = dp.Get<int>();
-
-  cout << "Receiving function " << fn << endl;
-
-  switch(fn) {
-    case COEFF_INIT:
-      {
-        CoeffInit(dp);
-        //TODO: delete prints
-        //PrintImageSums(); 
-        //PrintAttributeVectorSums();
-        //for (int i = 0; i < (int) _transformations.size(); i++)
-        //  _transformations[i].PrintTransformation();
-        cout << " Outside CoeffInit " << endl;
-        ReturnFromCoeffInit(nid);
-        break;
-      }
-    default:
-      cout << "Invalid option" << endl;
-  }
-}
 
 void irtkReconstruction::DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, 
     irtkRealImage& tmp) {
@@ -709,4 +757,43 @@ void irtkReconstruction::DeserializeSlice(ebbrt::IOBuf::DataPointer& dp,
   irtkRealImage ri(at, ptr2, matI2W, matW2I);
 
   tmp = std::move(ri);
+}
+
+void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
+    std::unique_ptr<IOBuf> &&buffer) {
+  auto dp = buffer->GetDataPointer();
+  auto fn = dp.Get<int>();
+
+  cout << "Receiving function " << fn << endl;
+
+  switch(fn) {
+    case COEFF_INIT:
+      {
+        CoeffInit(dp);
+        //TODO: delete prints
+        cout << "-----------------------------" << endl;
+        cout << "After COEFF_INIT" << endl;
+        PrintImageSums(); 
+        PrintAttributeVectorSums();
+        for (int i = 0; i < (int) _transformations.size(); i++)
+          _transformations[i].PrintTransformation();
+        ReturnFrom(COEFF_INIT, nid);
+        break;
+      }
+    case GAUSSIAN_RECONSTRUCTION:
+      {
+        GaussianReconstruction();
+        //TODO: delete prints
+        cout << "-----------------------------" << endl;
+        cout << "After GAUSSIAN_RECONSTRUCTION" << endl;
+        PrintImageSums(); 
+        PrintAttributeVectorSums();
+        ReturnFrom(GAUSSIAN_RECONSTRUCTION, nid);
+        for (int i = 0; i < (int) _transformations.size(); i++)
+          _transformations[i].PrintTransformation();
+        break;
+      }
+    default:
+      cout << "Invalid option" << endl;
+  }
 }

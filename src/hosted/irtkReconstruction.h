@@ -200,13 +200,17 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void InitializeEMValues();
 
-    struct reconstructionParameters CreateReconstructionParameters();
+    struct reconstructionParameters CreateReconstructionParameters(int start, int end);
 
-    struct coeffInitParameters createCoeffInitParameters(int start, int end);
+    // CoeffInit() function
+    struct coeffInitParameters createCoeffInitParameters();
 
     void CoeffInit(int iteration);
 
-    void ReturnFromCoeffInit();
+    //GaussianReconstruction() function
+    void GaussianReconstruction();
+
+    void ReturnFrom();
 
     void Execute();
 
