@@ -1,5 +1,6 @@
 
 #include "common.h"
+#include "../utils.h"
 
 #include <irtkImage.h>
 #include <irtkTransformation.h>
@@ -17,7 +18,6 @@ using namespace ebbrt;
 class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public irtkObject {
 
   private:
-
     // Ebb creation parameters 
     std::unordered_map<uint32_t, ebbrt::Promise<void>> _promise_map;
     std::mutex _m;
@@ -42,12 +42,12 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     vector<int> _forceExcluded; // Not used
     vector<int> _devicesToUse; // Not used
 
-    int _iterations;  // Not used
+    int _iterations;  
     int _levels; // Not used
-    int _recIterationsFirst; // Not used
-    int _recIterationsLast; // Not used
+    int _recIterationsFirst; 
+    int _recIterationsLast; 
     int _numThreads; // Not used
-    int _numBackendNodes; // Not used
+    int _numBackendNodes; 
     int _numFrontendCPUs; // Not used
 
     unsigned int _numInputStacksTuner; // Not used
@@ -57,17 +57,17 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     double _sigma; // Not used
     double _resolution; // Not used
     double _averageValue; // Not used
-    double _delta; // Not used
-    double _lambda; // Not used
+    double _delta; 
+    double _lambda; 
     double _lastIterLambda; // Not used
     double _smoothMask; // Not used
     double _lowIntensityCutoff; // Not used
 
     bool _globalBiasCorrection; // Not used
     bool _intensityMatching; // Not used
-    bool _debug; // Not used
-    bool _noLog; // Not used
-    bool _useCPU; // Not used
+    bool _debug; 
+    bool _noLog; 
+    bool _useCPU; 
     bool _useCPUReg; // Not used
     bool _useAutoTemplate; // Not used
     bool _useSINCPSF; // Not used
@@ -85,6 +85,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     vector<float> _stackFactor;
 
     vector<int> _stackIndex;
+    vector<int> _sliceInsideCPU;
 
     vector<irtkRigidTransformation> _transformations;
 
@@ -95,6 +96,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     vector<irtkRealImage> _weights;
     vector<irtkRealImage> _bias;
 
+    vector<SLICECOEFFS> _volcoeffs;
+
     int _directions[13][3];
 
     int _sigmaBias;
@@ -103,13 +106,15 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     int _tmix;
     int _tnum;
     int _totalBytes;
+    int _received;
+
 
     double _qualityFactor;
     double _step; 
-    double _sigmaSCpu;
-    double _sigmaS2Cpu;
-    double _mixSCpu;
-    double _mixCpu;
+    double _sigmaSCPU;
+    double _sigmaS2CPU;
+    double _mixSCPU;
+    double _mixCPU;
     double _alpha;
     double _tmin;
     double _tmax;
@@ -119,6 +124,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     bool _templateCreated;
     bool _haveMask;
     bool _adaptive;
+
+    ebbrt::Promise<int> _future;
 
   public:
 
@@ -140,10 +147,14 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     // Node allocation functions
     void AddNid(ebbrt::Messenger::NetworkId nid);
 
+    ebbrt::Future<void> WaitPool();
+
     // Reconstruction functions
     void SetParameters(arguments args);
 
     void SetDefaultParameters();
+
+    void SetSmoothingParameters();
 
     irtkRealImage CreateMask(irtkRealImage image);
 
@@ -186,6 +197,40 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void ReadTransformation(char* folder);
 
     void InitializeEM();
+
+    void InitializeEMValues();
+
+    struct reconstructionParameters CreateReconstructionParameters();
+
+    struct coeffInitParameters createCoeffInitParameters(int start, int end);
+
+    void CoeffInit(int iteration);
+
+    void ReturnFromCoeffInit();
+
+    void Execute();
+
+    // Auxiliary serialize functions
+    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeSlices();
+
+    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeReconstructed();
+
+    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeMask();
+
+    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeTransformations();
+
+    /*
+    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeImageAttr(irtkRealImage ri);
+
+    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeImageI2W(irtkRealImage& ri);
+
+    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeImageW2I(irtkRealImage& ri);
+
+    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeSlices(irtkRealImage& ri);
+
+    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeRigidTrans(
+        irtkRigidTransformation& rt);
+    */
 
     // Static Reconstruction functions
     static void ResetOrigin(irtkGreyImage &image, 

@@ -460,6 +460,23 @@ void AppMain() {
   //reconstruction->PrintImageSums();
   //reconstruction->PrintVectorSums(stacks, "Final stacks");
   //reconstruction->PrintAttributeVectorSums();
+
+  reconstruction->WaitPool().Then(
+    [reconstruction](ebbrt::Future<void> f) {
+      f.Get();
+      // Spawn work to backends
+      ebbrt::event_manager->Spawn([reconstruction]() {
+        reconstruction->Execute();
+        //reconstruction->SendRecon(ARGUMENTS.iterations);
+      });
+  });
+
+  /*
+  reconstruction->waitReceive().Then([](ebbrt::Future<void> f) {
+    f.Get();
+    ebbrt::Cpu::Exit(EXIT_SUCCESS);
+  });
+  */
 }
 
 int main(int argc, char **argv) {

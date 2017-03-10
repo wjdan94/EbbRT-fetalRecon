@@ -1,6 +1,5 @@
-
 #include "irtkReconstruction.h"
-#include "../utils.h"
+#include "../parameters.h"
 
 #include <irtkResampling.h>
 // Warning: The following three libraries must be imported toghether
@@ -83,10 +82,10 @@ void irtkReconstruction::SetDefaultParameters() {
 
   _step = 0.0001;
   _sigmaBias = 12;
-  _sigmaSCpu = 0.025;
-  _sigmaS2Cpu = 0.025;
-  _mixSCpu = 0.9;
-  _mixCpu = 0.9;
+  _sigmaSCPU = 0.025;
+  _sigmaS2CPU = 0.025;
+  _mixSCPU = 0.9;
+  _mixCPU = 0.9;
   _alpha = (0.05 / _lambda) * _delta * _delta;
 
   _templateCreated = false;
@@ -165,10 +164,37 @@ void irtkReconstruction::SetParameters(arguments args) {
   _disableBiasCorr = args.disableBiasCorr; // Not used
 }
 
+void irtkReconstruction::ReturnFromCoeffInit() {
+  _received++;
+  if (_received == _numBackendNodes) {
+    _received = 0;
+    _future.SetValue(1);
+  }
+}
+
 void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
     std::unique_ptr<IOBuf> &&buffer) {
 
+  auto dp = buffer->GetDataPointer();
+  auto fn = dp.Get<int>();
+  cout << "Receiving back from function " << fn << endl;
+
+  switch(fn) {
+    case COEFF_INIT: 
+      {
+        ReturnFromCoeffInit();
+        break;
+      }
+    default:
+      cout << "Invalid option" << endl;
+  } 
+
 }
+
+ebbrt::Future<void> irtkReconstruction::WaitPool() {
+  return std::move(_backendsAllocated.GetFuture());
+}
+
 
 void irtkReconstruction::AddNid(ebbrt::Messenger::NetworkId nid) {
   _nids.push_back(nid);
@@ -847,6 +873,337 @@ void irtkReconstruction::InitializeEM() {
   }
 }
 
+void irtkReconstruction::Execute() {
+  for (int it = 0; it < _iterations; it++) {
+    if (_debug)
+      cout << "Iteration " << it << endl;
+
+    // TODO: fix for iterations greater than 1. For now just testing one
+    // iteration.
+    if (it > 0) {
+      //TODO: Figure out if the package-related functions are needed
+      // or they can be discarded.
+      // SliceToVolumeRegistration();
+    }
+
+    auto lastIteration = it == (_iterations - 1);
+
+    if (lastIteration) {
+      SetSmoothingParameters();
+    } else {
+      // TODO: fix for iterations greater than 1. For now just testing one
+      // iteration.
+    }
+
+    // Use faster reconstruction during iterations and slower for 
+    // final reconstruction
+    _qualityFactor = lastIteration ? 2 : 1;
+
+    InitializeEMValues();
+
+    CoeffInit(it);
+  }
+}
+
+struct coeffInitParameters irtkReconstruction::createCoeffInitParameters(
+    int start, int end) {
+  struct coeffInitParameters parameters;
+  parameters.start = start;
+  parameters.end = end;
+  parameters.debug = _debug;
+  parameters.stackFactor = _stackFactor.size();
+  parameters.stackIndex = _stackIndex.size();
+  parameters.delta = _delta;
+  parameters.lambda = _lambda;
+  parameters.alpha = _alpha;
+  parameters.qualityFactor = _qualityFactor;
+
+  return parameters;
+}
+
+struct reconstructionParameters 
+    irtkReconstruction::CreateReconstructionParameters() {
+  struct reconstructionParameters parameters;
+
+  parameters.globalBiasCorrection = _globalBiasCorrection;
+  parameters.adaptive = _adaptive;
+  parameters.sigmaBias = _sigmaBias;
+  parameters.step = _step;
+  parameters.sigmaSCPU = _sigmaSCPU;
+  parameters.sigmaS2CPU = _sigmaS2CPU;
+  parameters.mixSCPU = _mixSCPU;
+  parameters.mixCPU = _mixCPU;
+  parameters.lowIntensityCutoff = _lowIntensityCutoff;
+  parameters.numThreads = _numThreads;
+
+  for (int i = 0; i < 13; i++)
+    for (int j = 0; j < 3; j++)
+      parameters.directions[i][j] = _directions[i][j];
+
+  return parameters;
+}
+
+void irtkReconstruction::CoeffInit(int iteration) {
+  _volcoeffs.clear();
+  _volcoeffs.resize(_slices.size());
+
+  _sliceInsideCPU.clear();
+  _sliceInsideCPU.resize(_slices.size());
+
+  if (iteration == 0) {
+    int diff = _slices.size();
+    int factor = (int) ceil(diff / (float)(_numBackendNodes));
+    int start;
+    int end;
+
+    for (int i = 0; i < (int) _nids.size(); i++) {
+      start = i * factor;
+      end = i * factor + factor;
+      end = (end > diff) ? diff : end;
+
+      auto parameters = createCoeffInitParameters(start, end);
+      parameters.iteration = it;
+      auto reconstructionParameters = CreateReconstructionParameters();
+
+      auto buf = MakeUniqueIOBuf(sizeof(int) + 
+          sizeof(struct coeffInitParameters) +
+          sizeof(struct reconstructionParameters));
+      auto dp = buf->GetMutDataPointer();
+
+      dp.Get<int>() = COEFF_INIT; 
+      dp.Get<struct coeffInitParameters>() = parameters;
+      dp.Get<struct reconstructionParameters>() = reconstructionParameters;
+
+      auto sf = std::make_unique<StaticIOBuf>(
+          reinterpret_cast<const uint8_t *>(_stackFactor.data()),
+          (size_t)(_stackFactor.size() * sizeof(float)));
+      
+      auto si = std::make_unique<StaticIOBuf>(
+          reinterpret_cast<const uint8_t *>(_stackIndex.data()),
+          (size_t)(_stackIndex.size() * sizeof(int)));
+
+      // TODO: Try to move this functions to another file
+      buf->PrependChain(std::move(SerializeSlices()));
+      buf->PrependChain(std::move(SerializeReconstructed()));
+      buf->PrependChain(std::move(SerializeMask()));
+      buf->PrependChain(std::move(SerializeTransformations()));
+      buf->PrependChain(std::move(sf));
+      buf->PrependChain(std::move(si));
+
+      _totalBytes += buf->ComputeChainDataLength();
+      
+      //TODO: delete prints
+      //PrintImageSums();
+      //PrintAttributeVectorSums();
+
+      _received = 0;
+      SendMessage(_nids[i], std::move(buf));
+    }
+  } else {
+
+  } 
+
+  _future = ebbrt::Promise<int>();
+  auto f = _future.GetFuture();
+  if (_debug)
+    cout << "CoeffInit(): Blocking" << endl;
+
+  f.Block();
+  if (_debug)
+    cout << "CoeffInit(): Returned from future" << endl;
+}
+
+unique_ptr<ebbrt::MutUniqueIOBuf> SerializeImageAttr(irtkRealImage ri) {
+  irtkImageAttributes at;
+
+  at = ri.GetImageAttributes();
+
+  auto buf = MakeUniqueIOBuf((4 * sizeof(int)) + (17 * sizeof(double)));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = at._x;
+  dp.Get<int>() = at._y;
+  dp.Get<int>() = at._z;
+  dp.Get<int>() = at._t;
+
+  // Default voxel size
+  dp.Get<double>() = at._dx;
+  dp.Get<double>() = at._dy;
+  dp.Get<double>() = at._dz;
+  dp.Get<double>() = at._dt;
+
+  // Default origin
+  dp.Get<double>() = at._xorigin;
+  dp.Get<double>() = at._yorigin;
+  dp.Get<double>() = at._zorigin;
+  dp.Get<double>() = at._torigin;
+
+  // Default x-axis
+  dp.Get<double>() = at._xaxis[0];
+  dp.Get<double>() = at._xaxis[1];
+  dp.Get<double>() = at._xaxis[2];
+
+  // Default y-axis
+  dp.Get<double>() = at._yaxis[0];
+  dp.Get<double>() = at._yaxis[1];
+  dp.Get<double>() = at._yaxis[2];
+
+  // Default z-axis
+  dp.Get<double>() = at._zaxis[0];
+  dp.Get<double>() = at._zaxis[1];
+  dp.Get<double>() = at._zaxis[2];
+
+  return buf;
+}
+
+unique_ptr<ebbrt::MutUniqueIOBuf> SerializeImageI2W(irtkRealImage& ri) {
+  auto buf = MakeUniqueIOBuf(2 * sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = ri.GetWorldToImageMatrix().Rows();
+  dp.Get<int>() = ri.GetWorldToImageMatrix().Cols();
+
+  auto buf2 = std::make_unique<StaticIOBuf>(
+      reinterpret_cast<const uint8_t *>(ri.GetWorldToImageMatrix().GetMatrix()),
+      (size_t)(ri.GetWorldToImageMatrix().Rows() * ri.GetWorldToImageMatrix().Cols() * sizeof(double)));
+  buf->PrependChain(std::move(buf2));
+
+  return buf;
+}
+
+unique_ptr<ebbrt::MutUniqueIOBuf> SerializeImageW2I(irtkRealImage& ri) {
+  auto buf = MakeUniqueIOBuf(2 * sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = ri.GetWorldToImageMatrix().Rows();
+  dp.Get<int>() = ri.GetWorldToImageMatrix().Cols();
+
+  auto buf2 = std::make_unique<StaticIOBuf>(
+      reinterpret_cast<const uint8_t *>(ri.GetWorldToImageMatrix().GetMatrix()),
+      (size_t)(ri.GetWorldToImageMatrix().Rows() * ri.GetWorldToImageMatrix().Cols() * sizeof(double)));
+  buf->PrependChain(std::move(buf2));
+
+  return buf;
+}
+
+unique_ptr<ebbrt::MutUniqueIOBuf> SerializeImage(irtkRealImage& ri) {
+  auto buf = MakeUniqueIOBuf(1 * sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = ri.GetSizeMat();
+
+  auto buf2 = std::make_unique<StaticIOBuf>(
+      reinterpret_cast<const uint8_t *>(ri.GetMat()),
+      (size_t)(ri.GetSizeMat() * sizeof(double)));
+
+  buf->PrependChain(std::move(buf2));
+
+  return buf;
+}
+
+unique_ptr<ebbrt::MutUniqueIOBuf> SerializeRigidTrans(irtkRigidTransformation& rt) {
+  auto buf = MakeUniqueIOBuf((12 * sizeof(double)) + (8 * sizeof(int)));
+  auto dp = buf->GetMutDataPointer();
+
+  dp.Get<double>() = rt._tx;
+  dp.Get<double>() = rt._ty;
+  dp.Get<double>() = rt._tz;
+
+  dp.Get<double>() = rt._rx;
+  dp.Get<double>() = rt._ry;
+  dp.Get<double>() = rt._rz;
+
+  dp.Get<double>() = rt._cosrx;
+  dp.Get<double>() = rt._cosry;
+  dp.Get<double>() = rt._cosrz;
+
+  dp.Get<double>() = rt._sinrx;
+  dp.Get<double>() = rt._sinry;
+  dp.Get<double>() = rt._sinrz;
+
+  dp.Get<int>() = (int)(rt._status[0]);
+  dp.Get<int>() = (int)(rt._status[1]);
+  dp.Get<int>() = (int)(rt._status[2]);
+  dp.Get<int>() = (int)(rt._status[3]);
+  dp.Get<int>() = (int)(rt._status[4]);
+  dp.Get<int>() = (int)(rt._status[5]);
+
+  dp.Get<int>() = rt._matrix.Rows();
+  dp.Get<int>() = rt._matrix.Cols();
+
+  auto buf2 = std::make_unique<StaticIOBuf>(
+      reinterpret_cast<const uint8_t *>(rt._matrix.GetMatrix()),
+      (size_t)(rt._matrix.Rows() * rt._matrix.Cols()  * sizeof(double)));
+
+  buf->PrependChain(std::move(buf2));
+
+  return buf;
+}
+
+unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeSlices() {
+  auto buf = MakeUniqueIOBuf(1 * sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = _slices.size();
+
+  for (int j = 0; j < _slices.size(); j++) {
+    buf->PrependChain(std::move(SerializeImageAttr(_slices[j])));
+    buf->PrependChain(std::move(SerializeImageI2W(_slices[j])));
+    buf->PrependChain(std::move(SerializeImageW2I(_slices[j])));
+    buf->PrependChain(std::move(SerializeImage(_slices[j])));
+  }
+  return buf;
+}
+
+unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeReconstructed() {
+  auto buf = MakeUniqueIOBuf(0);
+  buf->PrependChain(std::move(SerializeImageAttr(_reconstructed)));
+  buf->PrependChain(std::move(SerializeImageI2W(_reconstructed)));
+  buf->PrependChain(std::move(SerializeImageW2I(_reconstructed)));
+  buf->PrependChain(std::move(SerializeImage(_reconstructed)));
+  return buf;
+}
+
+unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeMask() {
+  auto buf = MakeUniqueIOBuf(0);
+  buf->PrependChain(std::move(SerializeImageAttr(_mask)));
+  buf->PrependChain(std::move(SerializeImageI2W(_mask)));
+  buf->PrependChain(std::move(SerializeImageW2I(_mask)));
+  buf->PrependChain(std::move(SerializeImage(_mask)));
+  return buf;
+}
+
+unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeTransformations() {
+  auto buf = MakeUniqueIOBuf(1 * sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = _transformations.size();
+
+  for(int j = 0; j < _transformations.size(); j++) {
+    buf->PrependChain(std::move(SerializeRigidTrans(_transformations[j])));
+  }
+  return buf;
+}
+
+void irtkReconstruction::InitializeEMValues() {
+  for (int i = 0; i < _slices.size(); i++) {
+    // [fetalRecontruction] Initialize voxel weights and bias values
+    irtkRealPixel *pw = _weights[i].GetPointerToVoxels();
+    irtkRealPixel *pb = _bias[i].GetPointerToVoxels();
+    irtkRealPixel *pi = _slices[i].GetPointerToVoxels();
+    for (int j = 0; j < _weights[i].GetNumberOfVoxels(); j++) {
+      if (*pi != -1) {
+        *pw = 1;
+        *pb = 0;
+      } else {
+        *pw = 0;
+        *pb = 0;
+      }
+      pi++;
+      pw++;
+      pb++;
+    }
+    // [fetalRecontruction] Initialize slice weights
+    _sliceWeightCPU[i] = 1;
+    // [fetalRecontruction] Initialize scaling factors for intensity matching
+    _scaleCPU[i] = 1;
+  }
+}
+
 void irtkReconstruction::ResetOrigin(
     irtkGreyImage &image, irtkRigidTransformation &transformation) {
   double ox, oy, oz;
@@ -860,3 +1217,9 @@ void irtkReconstruction::ResetOrigin(
   transformation.PutRotationZ(0);
 }
 
+
+void irtkReconstruction::SetSmoothingParameters() {
+  _lambda = _lambda * _delta * _delta;
+  _alpha = 0.05 / _lambda;
+  _alpha = (_alpha > 1) ? 1 : _alpha;
+}
