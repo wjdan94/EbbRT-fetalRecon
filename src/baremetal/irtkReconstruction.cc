@@ -644,6 +644,64 @@ void irtkReconstruction::GaussianReconstruction() {
       _smallSlices.push_back(i);
 }
 
+void irtkReconstruction::ParallelSimulateSlices(int start, int end) {
+  for (int inputIndex = start; inputIndex != end; ++inputIndex) {
+    _simulatedSlices[inputIndex].Initialize(
+        _slices[inputIndex].GetImageAttributes());
+
+    _simulatedSlices[inputIndex] = 0;
+
+    _simulatedWeights[inputIndex].Initialize(
+        _slices[inputIndex].GetImageAttributes());
+
+    _simulatedWeights[inputIndex] = 0;
+
+    _simulatedInside[inputIndex].Initialize(
+        _slices[inputIndex].GetImageAttributes());
+    
+    _simulatedInside[inputIndex] = 0;
+    _sliceInsideCPU[inputIndex] = 0;
+
+    POINT3D p;
+    for (unsigned int i = 0; (int) i < _slices[inputIndex].GetX();
+         i++) {
+      for (unsigned int j = 0; (int) j < _slices[inputIndex].GetY();
+           j++) {
+        if (_slices[inputIndex](i, j, 0) != -1) {
+          double weight = 0;
+          int n = _volcoeffs[inputIndex][i][j].size();
+
+          for (unsigned int k = 0; (int) k < n; k++) {
+            p = _volcoeffs[inputIndex][i][j][k];
+
+            _simulatedSlices[inputIndex](i, j, 0) +=
+                p.value * _reconstructed(p.x, p.y, p.z);
+            weight += p.value;
+
+            if (_mask(p.x, p.y, p.z) == 1) {
+              _simulatedInside[inputIndex](i, j, 0) = 1;
+              _sliceInsideCPU[inputIndex] = 1;
+            }
+          }
+
+          if (weight > 0) {
+            _simulatedSlices[inputIndex](i, j, 0) /= weight;
+            _simulatedWeights[inputIndex](i, j, 0) = weight;
+          }
+        }
+      }
+    }
+  }
+}
+
+void irtkReconstruction::SimulateSlices() {
+  _simulatedSlices.resize(_end - _start);
+  _simulatedInside.resize(_end - _start);
+  _simulatedWeights.resize(_end - _start);
+  
+  ParallelSimulateSlices(_start, _end);
+}
+
 
 void irtkReconstruction::DeserializeTransformations(
     ebbrt::IOBuf::DataPointer& dp, irtkRigidTransformation& tmp) {
@@ -791,6 +849,25 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
         ReturnFrom(GAUSSIAN_RECONSTRUCTION, nid);
         for (int i = 0; i < (int) _transformations.size(); i++)
           _transformations[i].PrintTransformation();
+        break;
+      }
+    case SIMULATE_SLICES:
+      {
+        SimulateSlices();
+        cout << "-----------------------------" << endl;
+        cout << "After SIMULATE_SLICES" << endl;
+        PrintImageSums(); 
+        PrintAttributeVectorSums();
+        ReturnFrom(SIMULATE_SLICES, nid);
+        for (int i = 0; i < (int) _transformations.size(); i++)
+          _transformations[i].PrintTransformation();
+
+        PrintVectorSums(_simulatedSlices, "Simulated Slices");
+        PrintVectorSums(_simulatedWeights, "Simulated Weights");
+        PrintVectorSums(_simulatedInside, "Simulated Inside");
+
+        cout << "Reconstructed: " << SumImage(_reconstructed) << endl;
+
         break;
       }
     default:

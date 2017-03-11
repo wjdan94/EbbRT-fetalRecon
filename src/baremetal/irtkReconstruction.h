@@ -83,6 +83,9 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     vector<irtkRealImage> _slices;
     vector<irtkRealImage> _weights;
     vector<irtkRealImage> _bias;
+    vector<irtkRealImage> _simulatedSlices;
+    vector<irtkRealImage> _simulatedInside;
+    vector<irtkRealImage> _simulatedWeights;
 
     vector<SLICECOEFFS> _volcoeffs;
 
@@ -117,6 +120,10 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void InitializeEM();
 
     void GaussianReconstruction();
+    
+    void ParallelSimulateSlices(int start, int end);
+
+    void SimulateSlices();
 
     // Deserializer functions
     void DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp);

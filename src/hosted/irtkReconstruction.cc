@@ -190,6 +190,11 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
         ReturnFrom();
         break;
       }
+    case SIMULATE_SLICES:
+      {
+        ReturnFrom();
+        break;
+      }
     default:
       cout << "Invalid option" << endl;
   } 
@@ -909,6 +914,8 @@ void irtkReconstruction::Execute() {
     CoeffInit(it);
 
     GaussianReconstruction();
+
+    SimulateSlices();
   }
 }
 
@@ -1020,7 +1027,7 @@ void irtkReconstruction::CoeffInit(int iteration) {
 
 void irtkReconstruction::GaussianReconstruction() {
     for (int i = 0; i < (int) _nids.size(); i++) {
-      auto buf = MakeUniqueIOBuf(1 * sizeof(int));
+      auto buf = MakeUniqueIOBuf(sizeof(int));
       auto dp = buf->GetMutDataPointer();
       dp.Get<int>() = 1;
 
@@ -1036,6 +1043,29 @@ void irtkReconstruction::GaussianReconstruction() {
     f.Block();
     if (_debug)
       cout << "GaussianReconstruction(): Returned from future" << endl;
+}
+
+void irtkReconstruction::SimulateSlices() {
+    for (int i = 0; i < (int) _nids.size(); i++) {
+      auto buf = MakeUniqueIOBuf(sizeof(int));
+      auto dp = buf->GetMutDataPointer();
+      dp.Get<int>() = 2;
+
+      // TODO: verify if the reconstructed volume must be sent
+      //buf->PrependChain(std::move(SerializeSlices(_reconstructed)));
+
+      _totalBytes += buf->ComputeChainDataLength();
+      SendMessage(_nids[i], std::move(buf));
+    }
+
+    _future = ebbrt::Promise<int>();
+    auto f = _future.GetFuture();
+    if (_debug)
+      cout << "SimulateSlices(): Blocking" << endl;
+
+    f.Block();
+    if (_debug)
+      cout << "SimulateSlices(): Returned from future" << endl;
 }
 
 unique_ptr<ebbrt::MutUniqueIOBuf> SerializeImageAttr(irtkRealImage ri) {
@@ -1172,6 +1202,20 @@ unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeSlices() {
     buf->PrependChain(std::move(SerializeImageW2I(_slices[j])));
     buf->PrependChain(std::move(SerializeImage(_slices[j])));
   }
+  return buf;
+}
+
+unique_ptr<ebbrt::MutUniqueIOBuf> SerializeSlices(irtkRealImage& ri) {
+  auto buf = MakeUniqueIOBuf(1 * sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = ri.GetSizeMat();
+
+  auto buf2 = std::make_unique<StaticIOBuf>(
+      reinterpret_cast<const uint8_t *>(ri.GetMat()),
+      (size_t)(ri.GetSizeMat() * sizeof(double)));
+
+  buf->PrependChain(std::move(buf2));
+
   return buf;
 }
 

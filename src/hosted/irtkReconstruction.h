@@ -210,6 +210,9 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     //GaussianReconstruction() function
     void GaussianReconstruction();
 
+    //SimulateSlices() function
+    void SimulateSlices();
+
     void ReturnFrom();
 
     void Execute();
