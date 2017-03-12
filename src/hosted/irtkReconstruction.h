@@ -37,7 +37,9 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     vector<string> _inputStacks; // Not used
     vector<string> _inputTransformations; // Not used
+
     vector<double> _thickness; // Not used
+
     vector<int> _packages; // Not used
     vector<int> _forceExcluded; // Not used
     vector<int> _devicesToUse; // Not used
@@ -88,6 +90,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     vector<int> _stackIndex;
     vector<int> _sliceInsideCPU;
     vector<int> _smallSlices;
+    vector<int> _voxelNum;
 
     vector<irtkRigidTransformation> _transformations;
 
@@ -110,7 +113,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     int _totalBytes;
     int _received;
 
-
     double _qualityFactor;
     double _step; 
     double _sigmaSCPU;
@@ -128,6 +130,10 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     bool _adaptive;
 
     ebbrt::Promise<int> _future;
+    
+    int* _reconstructedIntPtr = NULL;
+    double* _reconstructedDoublePtr = NULL;
+    double* _volumeWeightsDoublePtr = NULL;
 
   public:
 
@@ -204,21 +210,28 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     struct reconstructionParameters CreateReconstructionParameters(int start, int end);
 
+    void ReturnFrom();
+
     // CoeffInit() function
     struct coeffInitParameters createCoeffInitParameters();
 
     void CoeffInit(int iteration);
 
+    void ReturnFromCoeffInit(ebbrt::IOBuf::DataPointer & dp);
+
     //GaussianReconstruction() function
     void GaussianReconstruction();
+
+    void AssembleImage(ebbrt::IOBuf::DataPointer & dp);
+
+    void ReturnFromGaussianReconstruction(ebbrt::IOBuf::DataPointer & dp);
 
     //SimulateSlices() function
     void SimulateSlices();
 
-    void ReturnFrom();
+    void ReturnFromSimulateSlices(ebbrt::IOBuf::DataPointer & dp);
     
-    void ReturnFromCoeffInit(ebbrt::IOBuf::DataPointer& dp);
-
+    // Start program execution
     void Execute();
 
     // Static Reconstruction functions
@@ -235,9 +248,14 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     inline void PrintAttributeVectorSums();
 
     // Serialize
+    void DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp);
+
     std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeSlices();
+
     std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeMask();
+
     std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeReconstructed();
+
     std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeTransformations();
 };
 
@@ -258,10 +276,10 @@ inline void irtkReconstruction::PrintImageSums() {
        << SumImage(_externalRegistrationTargetImage) << endl; 
   */
 
-  cout << "_reconstructed: " 
+  cout << fixed << "_reconstructed: " 
        << SumImage(_reconstructed) << endl;
 
-  cout << "_mask: "
+  cout << fixed << "_mask: "
        << SumImage(_mask) << endl;
 }
 
@@ -273,10 +291,10 @@ inline void irtkReconstruction::PrintVectorSums(vector<irtkRealImage> images,
 }
 
 inline void irtkReconstruction::PrintAttributeVectorSums() {
-  PrintVectorSums(_slices, "slices");
-  PrintVectorSums(_simulatedSlices, "simulatedSlices");
-  PrintVectorSums(_simulatedInside, "simulatedInside");
-  PrintVectorSums(_simulatedWeights, "simulatedWeights");
-  PrintVectorSums(_weights, "weights");
-  PrintVectorSums(_bias, "bias");
+  PrintVectorSums(_slices, "_slices");
+  PrintVectorSums(_simulatedSlices, "_simulatedSlices");
+  PrintVectorSums(_simulatedInside, "_simulatedInside");
+  PrintVectorSums(_simulatedWeights, "_simulatedWeights");
+  PrintVectorSums(_weights, "_weights");
+  PrintVectorSums(_bias, "_bias");
 }

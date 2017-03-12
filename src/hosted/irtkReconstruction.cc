@@ -358,86 +358,9 @@ std::unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeTransformati
   return buf;
 }
 
-/* End serialize
-*/
-
-void irtkReconstruction::ReturnFrom() {
-  _received++;
-  if (_received == _numBackendNodes) {
-    _received = 0;
-    _future.SetValue(1);
-  }
-}
-
 /*
-   void irtkReconstruction::ReturnFromCoeffInit(ebbrt::IOBuf::DataPointer& dp) {
-// Deserialize
-int start = dp.Get<int>();
-int end = dp.Get<int>();
-
-cout << "Start: " << start << endl;
-cout << "End: " << end << endl;
-cout << "_volcoeffs.size(): " << _volcoeffs.size() << endl;
-
-for (int i = start; i < end; i++) {
-
-irtkRealImage& slice = _slices[i];
-VOXELCOEFFS empty;
-SLICECOEFFS slicecoeffs(slice.GetX(), vector < VOXELCOEFFS >(slice.GetY(), empty));
-
-int jEnd = dp.Get<int>();
-for (int j = 0; j < jEnd; j++) {
-int zEnd = dp.Get<int>();
-for (int z = 0; z < zEnd; z++) {
-int kEnd = dp.Get<int>();
-for (int k = 0; k < kEnd; k++) {
-POINT3D p = (struct POINT3D) dp.Get<struct POINT3D>();
-slicecoeffs[j][z].push_back(p);
-//_volcoeffs[i][j][z][k] = p;
-}
-}
-}
-_volcoeffs[i] = slicecoeffs;
-}
-
-
-
-
-ReturnFrom();
-
-}
-*/
-
-void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
-    std::unique_ptr<IOBuf> &&buffer) {
-
-  auto dp = buffer->GetDataPointer();
-  auto fn = dp.Get<int>();
-  cout << "Receiving back from function " << fn << endl;
-
-  switch(fn) {
-    case COEFF_INIT: 
-      {
-        //ReturnFromCoeffInit(dp);
-        ReturnFrom();
-        break;
-      }
-    case GAUSSIAN_RECONSTRUCTION:
-      {
-        ReturnFrom();
-        break;
-      }
-    case SIMULATE_SLICES:
-      {
-        ReturnFrom();
-        break;
-      }
-    default:
-      cout << "Invalid option" << endl;
-  } 
-
-}
-
+ * Pool Allocator helper functions
+ */
 ebbrt::Future<void> irtkReconstruction::WaitPool() {
   return std::move(_backendsAllocated.GetFuture());
 }
@@ -450,9 +373,64 @@ void irtkReconstruction::AddNid(ebbrt::Messenger::NetworkId nid) {
   }
 }
 
-/**
+/*
  * Fetal Reconstruction functions
- **/ 
+ */ 
+void irtkReconstruction::ReturnFrom() {
+  _received++;
+  if (_received == _numBackendNodes) {
+    _received = 0;
+    _future.SetValue(1);
+  }
+}
+
+void irtkReconstruction::AssembleImage(ebbrt::IOBuf::DataPointer & dp) { 
+
+  int start = dp.Get<int>();
+  int end = dp.Get<int>();
+
+  _reconstructedIntPtr = (int *) malloc((end - start)*sizeof(int));
+
+  dp.Get((end-start) * sizeof(int), (uint8_t*) _reconstructedIntPtr);
+
+  memcpy(_voxelNum.data() + start, _reconstructedIntPtr, 
+      (end-start) * sizeof(int));
+  
+  int size = dp.Get<int>();
+
+  _reconstructedDoublePtr = (double*) malloc (
+      _reconstructed.GetSizeMat()*sizeof(double));
+
+  dp.Get(size*sizeof(double), (uint8_t*) _reconstructedDoublePtr);
+
+  _reconstructed.SumVec(_reconstructedDoublePtr);
+
+  size = dp.Get<int>();
+
+  _volumeWeightsDoublePtr = (double*) malloc (
+      _volumeWeights.GetSizeMat()*sizeof(double));
+
+  dp.Get(size*sizeof(double), (uint8_t*) _volumeWeightsDoublePtr);
+
+  _volumeWeights.SumVec(_volumeWeightsDoublePtr);
+}
+
+void irtkReconstruction::ReturnFromGaussianReconstruction(
+    ebbrt::IOBuf::DataPointer & dp) {
+  AssembleImage(dp);
+  ReturnFrom();
+}
+
+void irtkReconstruction::ReturnFromCoeffInit(
+    ebbrt::IOBuf::DataPointer & dp) {
+  ReturnFrom();
+}
+
+void irtkReconstruction::ReturnFromSimulateSlices(
+    ebbrt::IOBuf::DataPointer & dp) {
+  ReturnFrom();
+}
+
 
 irtkRealImage irtkReconstruction::CreateMask(irtkRealImage image) {
   // [fetalRecontruction] binarize mask
@@ -1242,10 +1220,6 @@ void irtkReconstruction::CoeffInit(int iteration) {
 
       _totalBytes += buf->ComputeChainDataLength();
 
-      //TODO: delete prints
-      //PrintImageSums();
-      //PrintAttributeVectorSums();
-
       _received = 0;
       SendMessage(_nids[i], std::move(buf));
     }
@@ -1261,32 +1235,49 @@ void irtkReconstruction::CoeffInit(int iteration) {
   f.Block();
   if (_debug)
     cout << "CoeffInit(): Returned from future" << endl;
+
+  if (_debug) {
+    cout << "---------------------------------------" << endl;
+    cout << "               COEFFINIT               " << endl;
+    PrintImageSums();
+    cout << "---------------------------------------" << endl;
+  }
 }
 
 void irtkReconstruction::GaussianReconstruction() {
-   for (int i = 0; i < (int) _nids.size(); i++) {
-   auto buf = MakeUniqueIOBuf(sizeof(int));
-   auto dp = buf->GetMutDataPointer();
-   dp.Get<int>() = 1;
 
-   _totalBytes += buf->ComputeChainDataLength();
-   SendMessage(_nids[i], std::move(buf));
-   }
+  _voxelNum.resize(_slices.size());
+  _reconstructed = 0;
+  _volumeWeights.Initialize(_reconstructed.GetImageAttributes());
+  _volumeWeights = 0;
 
-   auto buf = MakeUniqueIOBuf(sizeof(int));
-   auto dp = buf->GetMutDataPointer();
-   dp.Get<int>() = 1;
-   _totalBytes += buf->ComputeChainDataLength();
-   SendMessage(_nids[0], std::move(buf));
+  for (int i = 0; i < (int) _numBackendNodes; i++) {
+    auto buf = MakeUniqueIOBuf(sizeof(int));
+    auto dp = buf->GetMutDataPointer();
+    dp.Get<int>() = 1;
 
-   _future = ebbrt::Promise<int>();
-   auto f = _future.GetFuture();
-   if (_debug)
-   cout << "GaussianReconstruction(): Blocking" << endl;
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
 
-   f.Block();
-   if (_debug)
-   cout << "GaussianReconstruction(): Returned from future" << endl;
+  _future = ebbrt::Promise<int>();
+  auto f = _future.GetFuture();
+  if (_debug)
+    cout << "GaussianReconstruction(): Blocking" << endl;
+
+  f.Block();
+  if (_debug)
+    cout << "GaussianReconstruction(): Returned from future" << endl;
+
+  _reconstructed /= _volumeWeights;
+
+  if (_debug) {
+    cout << "---------------------------------------" << endl;
+    cout << "       GAUSSIAN RECONSTRUCTION         " << endl;
+    PrintImageSums();
+    cout << "_volumeWeights: " << SumImage(_volumeWeights) << endl;
+    cout << "---------------------------------------" << endl;
+  }
 }
 
 void irtkReconstruction::SimulateSlices() {
@@ -1296,7 +1287,7 @@ void irtkReconstruction::SimulateSlices() {
     dp.Get<int>() = 2;
 
     // TODO: verify if the reconstructed volume must be sent
-    //buf->PrependChain(std::move(SerializeSlices(_reconstructed)));
+    //buf->PrependChain(std::move(serializeSlices(_reconstructed)));
 
     _totalBytes += buf->ComputeChainDataLength();
     SendMessage(_nids[i], std::move(buf));
@@ -1310,6 +1301,13 @@ void irtkReconstruction::SimulateSlices() {
   f.Block();
   if (_debug)
     cout << "SimulateSlices(): Returned from future" << endl;
+
+  if (_debug) {
+    cout << "---------------------------------------" << endl;
+    cout << "           SIMULATE SLICES             " << endl;
+    PrintImageSums();
+    cout << "---------------------------------------" << endl;
+  }
 }
 
 void irtkReconstruction::InitializeEMValues() {
@@ -1350,9 +1348,38 @@ void irtkReconstruction::ResetOrigin(
   transformation.PutRotationZ(0);
 }
 
-
 void irtkReconstruction::SetSmoothingParameters() {
   _lambda = _lambda * _delta * _delta;
   _alpha = 0.05 / _lambda;
   _alpha = (_alpha > 1) ? 1 : _alpha;
+}
+
+/*
+ * ReceiveMessage() function
+ */
+void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
+    std::unique_ptr<IOBuf> &&buffer) {
+
+  auto dp = buffer->GetDataPointer();
+  auto fn = dp.Get<int>();
+
+  switch(fn) {
+    case COEFF_INIT: 
+      {
+        ReturnFromCoeffInit(dp);
+        break;
+      }
+    case GAUSSIAN_RECONSTRUCTION:
+      {
+        ReturnFromGaussianReconstruction(dp);
+        break;
+      }
+    case SIMULATE_SLICES:
+      {
+        ReturnFromSimulateSlices(dp);
+        break;
+      }
+    default:
+      cout << "Invalid option" << endl;
+  } 
 }

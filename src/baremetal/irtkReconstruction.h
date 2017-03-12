@@ -126,6 +126,10 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void GaussianReconstruction();
     
+    void ExcludeSlicesWithOverlap();
+    
+    void ReturnFromGaussianReconstruction(ebbrt::Messenger::NetworkId frontEndNid);
+
     void ParallelSimulateSlices(int start, int end);
 
     void SimulateSlices();

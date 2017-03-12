@@ -73,9 +73,23 @@ ebbrt::Future<void> irtkReconstruction::Ping(Messenger::NetworkId nid) {
 
 
 /*
- * Deserialize functions
+ * Serialize functions
  *
  */
+
+std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeSlices(irtkRealImage& ri) {
+    auto buf = MakeUniqueIOBuf(1 * sizeof(int));
+    auto dp = buf->GetMutDataPointer();
+    dp.Get<int>() = ri.GetSizeMat();
+    
+    auto buf2 = std::make_unique<StaticIOBuf>(
+	reinterpret_cast<const uint8_t *>(ri.GetMat()),
+	(size_t)(ri.GetSizeMat() * sizeof(double)));
+    
+    buf->PrependChain(std::move(buf2));
+    
+    return buf;
+}
 
 void irtkReconstruction::DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp)
 {
@@ -202,7 +216,8 @@ void printReconstructionParameters(struct reconstructionParameters parameters) {
 
 void irtkReconstruction::StoreParameters(
     struct reconstructionParameters parameters) {
-  printReconstructionParameters(parameters);
+  
+  
   _globalBiasCorrection = parameters.globalBiasCorrection;
   _adaptive = parameters.adaptive;
   _sigmaBias = parameters.sigmaBias;
@@ -224,23 +239,23 @@ void irtkReconstruction::StoreParameters(
 struct coeffInitParameters irtkReconstruction::StoreCoeffInitParameters(
     ebbrt::IOBuf::DataPointer& dp) {
   auto parameters = dp.Get<struct coeffInitParameters>();
-  printCoeffInitParameters(parameters);
   auto reconstructionParameters = dp.Get<struct reconstructionParameters>();
+  
+  _debug = parameters.debug;
+  
+  if (_debug)
+    printCoeffInitParameters(parameters);
+    printReconstructionParameters(reconstructionParameters);
 
   StoreParameters(reconstructionParameters);
 
-  // TODO: delete prints
-  //printCoeffInitParameters(parameters);
-  //printReconstructionParameters(reconstructionParameters);
-
-  _debug = parameters.debug;
   int stackFactorSize = parameters.stackFactor;
   int stackIndexSize = parameters.stackIndex;
   _delta = parameters.delta;
   _lambda = parameters.lambda;
   _alpha = parameters.lambda;
   _qualityFactor = parameters.qualityFactor;
-
+  
   auto nSlices = dp.Get<int>();
   _slices.resize(nSlices);
 
@@ -330,7 +345,10 @@ void irtkReconstruction::InitializeEM() {
 }
 
 void irtkReconstruction::ParallelCoeffInit(int start, int end) {
-  cout << "start: " << start << " end: " << end <<  endl;
+  if (_debug) {
+    cout << "[ParallelCoeffInit] "  << "start: " << start << " end: " << end <<  endl;
+  }
+  
   for (size_t index = start; (int) index != end; ++index) {
 
     bool sliceInside;
@@ -340,9 +358,6 @@ void irtkReconstruction::ParallelCoeffInit(int start, int end) {
     _reconstructed.GetPixelSize(&vx, &vy, &vz);
     //volume is always isotropic
     double res = vx;
-
-    //start of a loop for a slice index
-    cout << index << " ";
 
     //read the slice
     irtkRealImage& slice = _slices[index];
@@ -587,60 +602,6 @@ void irtkReconstruction::ParallelCoeffInit(int start, int end) {
   }  
 }
 
-/*
-   void irtkReconstruction::ReturnFromCoeffInit(Messenger::NetworkId frontEndNid) {
-   int count = 0;
-   int info = 3;
-
-//TODO: Improve this count 
-for (int i = _start; i < _end; i++) {
-info++;
-for (int j = 0; j < (int) _volcoeffs[i].size() ;j++) {
-info++;
-for (int z = 0; z < (int)  _volcoeffs[i][j].size() ;z++) {
-info++;
-for (int k = 0; k < (int) _volcoeffs[i][j][z].size(); k++) {
-count++;
-}
-}
-}
-}
-
-auto buf = MakeUniqueIOBuf( info * sizeof(int) + count * sizeof(POINT3D));
-auto dp = buf->GetMutDataPointer();
-
-dp.Get<int>() = (int) COEFF_INIT;
-// Serialize
-dp.Get<int>() = _start;
-dp.Get<int>() = _end;
-for (int i = _start; i < _end; i++) {
-int jEnd = (int) _volcoeffs[i].size();
-dp.Get<int>() = jEnd;
-//cout << "i: " << i << " jEnd: " << jEnd << endl;
-for (int j = 0; j < jEnd; j++) {
-int zEnd = (int) _volcoeffs[i][j].size();
-dp.Get<int>() = zEnd;
-//cout << "i: " << i << " zEnd: " << zEnd << endl;
-for (int z = 0; z < zEnd ;z++) {
-int kEnd = (int) _volcoeffs[i][j][z].size();
-dp.Get<int>() = kEnd;
-if (i == 1) 
-cout << "i: " << i << " kEnd: " << kEnd << endl;
-for (int k = 0; k < kEnd; k++) {
-auto p = _volcoeffs[i][j][z][k];
-dp.Get<struct POINT3D>() = p;
-if (i == 1) 
-cout << "POINT3D: " << p.x << " " << p.y << " " << p.z << endl;
-}
-}
-}
-}
-
-//TODO: _volumeWeights 
-SendMessage(frontEndNid, std::move(buf));
-}
-*/
-
 void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
 
   auto parameters = StoreCoeffInitParameters(dp);
@@ -656,9 +617,7 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
 
   int diff = _end - _start;
 
-  //cout << "nCPUs: " << nCPUs << endl;
-  //cout << "numThreas: " << _numThreads << endl;
-
+  //TODO:
   //int factor = (int)ceil(diff / (float)_numThreads);
   int factor = (int)ceil(diff / (float)1);
 
@@ -734,11 +693,6 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
     pm++;
   }
   _averageVolumeWeight = sum / num;
-
-  if (_debug) {
-    cout << fixed << "_averageVolumeWeight: " << _averageVolumeWeight << endl;
-    cout << fixed << "_volumeWeights: " << SumImage(_volumeWeights) << endl;
-  }
 }
 
 void irtkReconstruction::GaussianReconstruction() {
@@ -747,10 +701,10 @@ void irtkReconstruction::GaussianReconstruction() {
   irtkRealImage slice;
   double scale;
   POINT3D p;
-  vector<int> voxelNum;
   int sliceVoxNum;
 
   //clear _reconstructed image
+  _voxelNum.resize(_slices.size());
   _reconstructed = 0;
 
   for (inputIndex = _start; inputIndex < _end; ++inputIndex) {
@@ -759,8 +713,6 @@ void irtkReconstruction::GaussianReconstruction() {
     scale = _scaleCPU[inputIndex];
     sliceVoxNum = 0;
     
-    _voxelNum.resize(_end-_start);
-
     //Distribute slice intensities to the volume
     for (i = 0; i < slice.GetX(); i++) {
       for (j = 0; j < slice.GetY(); j++) {
@@ -787,18 +739,14 @@ void irtkReconstruction::GaussianReconstruction() {
       }
     }
 
-    _voxelNum[inputIndex-_start] = sliceVoxNum;
+    _voxelNum[inputIndex] = sliceVoxNum;
   }
+}
 
-  //normalize the volume by proportion of contributing slice voxels
-  //for each volume voxe
-  _reconstructed /= _volumeWeights;
-
-
-  //TODO: Verify if this must be done at the frontend level
+void irtkReconstruction::ExcludeSlicesWithOverlap() {
   vector<int> voxelNumTmp;
-  for (i = 0; i < (int) voxelNum.size(); i++)
-    voxelNumTmp.push_back(voxelNum[i]);
+  for (int i = 0; i < (int) _voxelNum.size(); i++)
+    voxelNumTmp.push_back(_voxelNum[i]);
 
   //find median
   sort(voxelNumTmp.begin(), voxelNumTmp.end());
@@ -806,8 +754,8 @@ void irtkReconstruction::GaussianReconstruction() {
 
   //remember slices with small overlap with ROI
   _smallSlices.clear();
-  for (i = 0; i < (int) voxelNum.size(); i++)
-    if (voxelNum[i] < 0.1*median)
+  for (int i = 0; i < (int) _voxelNum.size(); i++)
+    if (_voxelNum[i] < 0.1*median)
       _smallSlices.push_back(i);
 }
 
@@ -875,57 +823,108 @@ void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
   SendMessage(frontEndNid, std::move(buf));
 }
 
+void irtkReconstruction::ReturnFromGaussianReconstruction(Messenger::NetworkId frontEndNid) {
+  auto buf = MakeUniqueIOBuf(3 * sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  
+  dp.Get<int>() = GAUSSIAN_RECONSTRUCTION;
+  dp.Get<int>() = _start;
+  dp.Get<int>() = _end;
+
+  auto vnum = std::make_unique<StaticIOBuf>(
+      reinterpret_cast<const uint8_t *>(_voxelNum.data()),
+      (size_t)((_end-_start) * sizeof(int)));
+
+  PrintImageSums();
+  
+  buf->PrependChain(std::move(vnum));
+  buf->PrependChain(std::move(serializeSlices(_reconstructed)));
+
+  buf->PrependChain(std::move(serializeSlices(_volumeWeights)));
+  
+  SendMessage(frontEndNid, std::move(buf));
+}
+
 void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
     std::unique_ptr<IOBuf> &&buffer) {
   auto dp = buffer->GetDataPointer();
   auto fn = dp.Get<int>();
 
-  cout << "Receiving function " << fn << endl;
-
   switch(fn) {
     case COEFF_INIT:
       {
-        CoeffInit(dp);
-        //TODO: delete prints
-        cout << "-----------------------------" << endl;
-        cout << "After COEFF_INIT" << endl;
-        //PrintImageSums(); 
-        //PrintAttributeVectorSums();
-        //for (int i = 0; i < (int) _transformations.size(); i++)
-        //  _transformations[i].PrintTransformation();
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "               COEFFINIT               " << endl;
+          cout << "---------------------------------------" << endl;
+        }
 
+        CoeffInit(dp);
         ReturnFrom(COEFF_INIT,nid);
+
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "               COEFFINIT               " << endl;
+          PrintImageSums();
+          cout << "---------------------------------------" << endl;
+        }
+
         break;
       }
     case GAUSSIAN_RECONSTRUCTION:
       {
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "       GAUSSIAN RECONSTRUCTION         " << endl;
+          cout << "---------------------------------------" << endl;
+        }
+
         GaussianReconstruction();
-        //TODO: delete prints
-        cout << "-----------------------------" << endl;
-        cout << "After GAUSSIAN_RECONSTRUCTION" << endl;
-        PrintImageSums(); 
-        PrintAttributeVectorSums();
-        ReturnFrom(GAUSSIAN_RECONSTRUCTION, nid);
-        for (int i = 0; i < (int) _transformations.size(); i++)
-          _transformations[i].PrintTransformation();
+        ReturnFromGaussianReconstruction(nid);
+        
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "       GAUSSIAN RECONSTRUCTION         " << endl;
+          PrintImageSums();
+          cout << "_volumeWeights: " << SumImage(_volumeWeights) << endl;
+          cout << "---------------------------------------" << endl;
+        }
+
+        //TODO: this must be done in the FrontEnd
+        //ExcludeSlicesWithOverlap();
+
+        //for (int i = 0; i < (int) _transformations.size(); i++)
+        //  _transformations[i].PrintTransformation();
+        
         break;
       }
     case SIMULATE_SLICES:
       {
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "           SIMULATE SLICES             " << endl;
+          cout << "---------------------------------------" << endl;
+        }
+
         SimulateSlices();
-        cout << "-----------------------------" << endl;
-        cout << "After SIMULATE_SLICES" << endl;
-        PrintImageSums(); 
-        PrintAttributeVectorSums();
         ReturnFrom(SIMULATE_SLICES, nid);
+
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "           SIMULATE SLICES             " << endl;
+          PrintImageSums();
+          cout << "---------------------------------------" << endl;
+        }
+        
+        /*
         for (int i = 0; i < (int) _transformations.size(); i++)
           _transformations[i].PrintTransformation();
 
         PrintVectorSums(_simulatedSlices, "Simulated Slices");
         PrintVectorSums(_simulatedWeights, "Simulated Weights");
         PrintVectorSums(_simulatedInside, "Simulated Inside");
-
         cout << fixed << "Reconstructed: " << SumImage(_reconstructed) << endl;
+        */
 
         break;
       }
