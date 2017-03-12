@@ -77,6 +77,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     irtkRealImage _externalRegistrationTargetImage;
     irtkRealImage _reconstructed;
     irtkRealImage _mask;
+    irtkRealImage _volumeWeights;
 
     vector<double> _scaleCPU;
     vector<double> _sliceWeightCPU;
@@ -86,6 +87,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     vector<int> _stackIndex;
     vector<int> _sliceInsideCPU;
+    vector<int> _smallSlices;
 
     vector<irtkRigidTransformation> _transformations;
 
@@ -214,30 +216,10 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void SimulateSlices();
 
     void ReturnFrom();
+    
+    void ReturnFromCoeffInit(ebbrt::IOBuf::DataPointer& dp);
 
     void Execute();
-
-    // Auxiliary serialize functions
-    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeSlices();
-
-    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeReconstructed();
-
-    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeMask();
-
-    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeTransformations();
-
-    /*
-    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeImageAttr(irtkRealImage ri);
-
-    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeImageI2W(irtkRealImage& ri);
-
-    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeImageW2I(irtkRealImage& ri);
-
-    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeSlices(irtkRealImage& ri);
-
-    unique_ptr<ebbrt::MutUniqueIOBuf> SerializeRigidTrans(
-        irtkRigidTransformation& rt);
-    */
 
     // Static Reconstruction functions
     static void ResetOrigin(irtkGreyImage &image, 
@@ -251,6 +233,12 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     inline void PrintVectorSums(vector<irtkRealImage> images, string name);
 
     inline void PrintAttributeVectorSums();
+
+    // Serialize
+    std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeSlices();
+    std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeMask();
+    std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeReconstructed();
+    std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeTransformations();
 };
 
 inline double irtkReconstruction::SumImage(irtkRealImage img) {

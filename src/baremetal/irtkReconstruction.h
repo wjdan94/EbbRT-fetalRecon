@@ -72,10 +72,13 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     vector<int> _stackIndex;
     vector<int> _sliceInsideCPU;
+    vector<int> _voxelNum;
+    //TODO: delete this since is not being used
     vector<int> _smallSlices;
 
     irtkRealImage _reconstructed;
     irtkRealImage _mask;
+    //TODO: delete this since is not being used
     irtkRealImage _volumeWeights;
 
     vector<irtkRigidTransformation> _transformations;
@@ -108,6 +111,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void ParallelCoeffInit(int start, int end);
 
+    //void ReturnFromCoeffInit(ebbrt::Messenger::NetworkId frontEndNid);
+    
     void ReturnFrom(int fn, ebbrt::Messenger::NetworkId frontEndNid);
 
     void StoreParameters(struct reconstructionParameters parameters);
@@ -125,14 +130,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void SimulateSlices();
 
-    // Deserializer functions
-    void DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp);
-
-    void DeserializeSliceVector(ebbrt::IOBuf::DataPointer& dp, int nSlices);
-
-    void DeserializeTransformations(ebbrt::IOBuf::DataPointer& dp, 
-        irtkRigidTransformation& tmp);
-
     // Debugging functions
     inline double SumImage(irtkRealImage img);
 
@@ -141,6 +138,10 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     inline void PrintVectorSums(vector<irtkRealImage> images, string name);
 
     inline void PrintAttributeVectorSums();
+    
+    // Serialize
+    void DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp);
+    void DeserializeTransformations(ebbrt::IOBuf::DataPointer& dp, irtkRigidTransformation& tmp);
 };
 
 inline double irtkReconstruction::SumImage(irtkRealImage img) {
@@ -160,10 +161,10 @@ inline void irtkReconstruction::PrintImageSums() {
      << SumImage(_externalRegistrationTargetImage) << endl; 
      */
 
-  cout << "_reconstructed: " 
+  cout << fixed << "_reconstructed: " 
     << SumImage(_reconstructed) << endl;
 
-  cout << "_mask: "
+  cout << fixed << "_mask: "
     << SumImage(_mask) << endl;
 }
 

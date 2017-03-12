@@ -7,41 +7,41 @@ ebbrt::SpinLock spinlock;
 EBBRT_PUBLISH_TYPE(, irtkReconstruction);
 
 irtkReconstruction::irtkReconstruction(EbbId ebbid)
-    : Messagable<irtkReconstruction>(ebbid) {}
+  : Messagable<irtkReconstruction>(ebbid) {}
 
-// This Ebb is implemented with one representative per machine
-irtkReconstruction &irtkReconstruction::HandleFault(EbbId id) {
-  {
-    // First we check if the representative is in the LocalIdMap (using a
-    // read-lock)
-    LocalIdMap::ConstAccessor accessor;
-    auto found = local_id_map->Find(accessor, id);
-    if (found) {
-      auto &rep = *boost::any_cast<irtkReconstruction *>(accessor->second);
-      EbbRef<irtkReconstruction>::CacheRef(id, rep);
-      return rep;
+  // This Ebb is implemented with one representative per machine
+  irtkReconstruction &irtkReconstruction::HandleFault(EbbId id) {
+    {
+      // First we check if the representative is in the LocalIdMap (using a
+      // read-lock)
+      LocalIdMap::ConstAccessor accessor;
+      auto found = local_id_map->Find(accessor, id);
+      if (found) {
+        auto &rep = *boost::any_cast<irtkReconstruction *>(accessor->second);
+        EbbRef<irtkReconstruction>::CacheRef(id, rep);
+        return rep;
+      }
     }
-  }
 
-  irtkReconstruction *rep;
-  {
-    // Try to insert an entry into the LocalIdMap while holding an exclusive
-    // (write) lock
-    LocalIdMap::Accessor accessor;
-    auto created = local_id_map->Insert(accessor, id);
-    if (unlikely(!created)) {
-      // We raced with another writer, use the rep it created and return
-      rep = boost::any_cast<irtkReconstruction *>(accessor->second);
-    } else {
-      // Create a new rep and insert it into the LocalIdMap
-      rep = new irtkReconstruction(id);
-      accessor->second = rep;
+    irtkReconstruction *rep;
+    {
+      // Try to insert an entry into the LocalIdMap while holding an exclusive
+      // (write) lock
+      LocalIdMap::Accessor accessor;
+      auto created = local_id_map->Insert(accessor, id);
+      if (unlikely(!created)) {
+        // We raced with another writer, use the rep it created and return
+        rep = boost::any_cast<irtkReconstruction *>(accessor->second);
+      } else {
+        // Create a new rep and insert it into the LocalIdMap
+        rep = new irtkReconstruction(id);
+        accessor->second = rep;
+      }
     }
+    // Cache the reference to the rep in the local translation table
+    EbbRef<irtkReconstruction>::CacheRef(id, *rep);
+    return *rep;
   }
-  // Cache the reference to the rep in the local translation table
-  EbbRef<irtkReconstruction>::CacheRef(id, *rep);
-  return *rep;
-}
 
 EbbRef<irtkReconstruction> irtkReconstruction::Create(EbbId id) {
   return EbbRef<irtkReconstruction>(id);
@@ -59,7 +59,7 @@ ebbrt::Future<void> irtkReconstruction::Ping(Messenger::NetworkId nid) {
     bool inserted;
     // insert our promise into the hash table
     std::tie(std::ignore, inserted) =
-        _promise_map.emplace(id, std::move(promise));
+      _promise_map.emplace(id, std::move(promise));
     assert(inserted);
   }
   // Construct and send the ping message
@@ -70,6 +70,111 @@ ebbrt::Future<void> irtkReconstruction::Ping(Messenger::NetworkId nid) {
   std::printf("Ping SetMessage\n");
   return ret;
 }
+
+
+/*
+ * Deserialize functions
+ *
+ */
+
+void irtkReconstruction::DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp)
+{
+  auto x = dp.Get<int>();
+  auto y = dp.Get<int>();
+  auto z = dp.Get<int>();
+  auto t = dp.Get<int>();
+
+  auto dx = dp.Get<double>();
+  auto dy = dp.Get<double>();
+  auto dz = dp.Get<double>();
+  auto dt = dp.Get<double>();
+
+  auto xorg = dp.Get<double>();
+  auto yorg = dp.Get<double>();
+  auto zorg = dp.Get<double>();
+  auto torg = dp.Get<double>();
+
+  auto xa0 = dp.Get<double>();
+  auto xa1 = dp.Get<double>();
+  auto xa2 = dp.Get<double>();
+
+  auto ya0 = dp.Get<double>();
+  auto ya1 = dp.Get<double>();
+  auto ya2 = dp.Get<double>();
+
+  auto za0 = dp.Get<double>();
+  auto za1 = dp.Get<double>();
+  auto za2 = dp.Get<double>();
+
+  irtkImageAttributes at(
+      x, y, z, t,
+      dx, dy, dz, dt,
+      xorg, yorg, zorg, torg,
+      xa0, xa1, xa2, ya0,
+      ya1, ya2, za0, za1,
+      za2
+      );
+
+  auto rows = dp.Get<int>();
+  auto cols = dp.Get<int>();
+  auto ptr = std::make_unique<double[]>(rows * cols);
+  dp.Get(rows * cols * sizeof(double), (uint8_t*)ptr.get());
+  irtkMatrix matI2W(rows, cols, std::move(ptr));
+
+  rows = dp.Get<int>();
+  cols = dp.Get<int>();
+  ptr = std::make_unique<double[]>(rows * cols);
+  dp.Get(rows * cols * sizeof(double), (uint8_t*)ptr.get());
+  irtkMatrix matW2I(rows, cols, std::move(ptr));
+
+  auto n = dp.Get<int>();
+  auto ptr2 = new double[n];
+  dp.Get(n*sizeof(double), (uint8_t*)ptr2);
+
+  irtkRealImage ri(at, ptr2, matI2W, matW2I);
+
+  tmp = std::move(ri);
+}
+
+void irtkReconstruction::DeserializeTransformations(ebbrt::IOBuf::DataPointer& dp, irtkRigidTransformation& tmp)
+{
+  auto tx = dp.Get<double>();
+  auto ty = dp.Get<double>();
+  auto tz = dp.Get<double>();
+
+  auto rx = dp.Get<double>();
+  auto ry = dp.Get<double>();
+  auto rz = dp.Get<double>();
+
+  auto cosrx = dp.Get<double>();
+  auto cosry = dp.Get<double>();
+  auto cosrz = dp.Get<double>();
+
+  auto sinx = dp.Get<double>();
+  auto siny = dp.Get<double>();
+  auto sinz = dp.Get<double>();
+
+  auto status0 = dp.Get<int>();
+  auto status1 = dp.Get<int>();
+  auto status2 = dp.Get<int>();
+  auto status3 = dp.Get<int>();
+  auto status4 = dp.Get<int>();
+  auto status5 = dp.Get<int>();
+
+  auto rows = dp.Get<int>();
+  auto cols = dp.Get<int>();
+  auto ptr = std::make_unique<double[]>(rows * cols);
+  dp.Get(rows * cols * sizeof(double), (uint8_t*)ptr.get());
+  irtkMatrix mat(rows, cols, std::move(ptr));
+
+  irtkRigidTransformation irt(tx, ty, tz, rx, ry, rz, cosrx, cosry, cosrz, sinx, siny, sinz, status0, status1, status2, status3, status4, status5, mat);
+
+  tmp = std::move(irt);
+}
+
+
+/* End of Deserialize functions */
+
 
 void printCoeffInitParameters(struct coeffInitParameters parameters) {
   cout << "CoeffInit() Parameters: " << endl;
@@ -97,6 +202,7 @@ void printReconstructionParameters(struct reconstructionParameters parameters) {
 
 void irtkReconstruction::StoreParameters(
     struct reconstructionParameters parameters) {
+  printReconstructionParameters(parameters);
   _globalBiasCorrection = parameters.globalBiasCorrection;
   _adaptive = parameters.adaptive;
   _sigmaBias = parameters.sigmaBias;
@@ -118,10 +224,11 @@ void irtkReconstruction::StoreParameters(
 struct coeffInitParameters irtkReconstruction::StoreCoeffInitParameters(
     ebbrt::IOBuf::DataPointer& dp) {
   auto parameters = dp.Get<struct coeffInitParameters>();
+  printCoeffInitParameters(parameters);
   auto reconstructionParameters = dp.Get<struct reconstructionParameters>();
 
   StoreParameters(reconstructionParameters);
-  
+
   // TODO: delete prints
   //printCoeffInitParameters(parameters);
   //printReconstructionParameters(reconstructionParameters);
@@ -137,21 +244,24 @@ struct coeffInitParameters irtkReconstruction::StoreCoeffInitParameters(
   auto nSlices = dp.Get<int>();
   _slices.resize(nSlices);
 
-  DeserializeSliceVector(dp, nSlices);
+  for (int i = 0; i < nSlices; i++) {
+    DeserializeSlice(dp, _slices[i]);
+  }
+
   DeserializeSlice(dp, _reconstructed);
   DeserializeSlice(dp, _mask);
 
   auto nRigidTrans = dp.Get<int>();	
 
   _transformations.resize(nRigidTrans);
-      
+
   for(int i = 0; i < nRigidTrans; i++) {
     DeserializeTransformations(dp, _transformations[i]);
   }
 
   _stackFactor.resize(stackFactorSize);
   dp.Get(stackFactorSize*sizeof(float), (uint8_t*)_stackFactor.data());
-      
+
   _stackIndex.resize(stackIndexSize);
   dp.Get(stackIndexSize*sizeof(int), (uint8_t*)_stackIndex.data());
 
@@ -201,7 +311,7 @@ void irtkReconstruction::InitializeEM() {
     _slicePotential.push_back(0);
   }
 
-// [fetalRecontruction] Find the range of intensities
+  // [fetalRecontruction] Find the range of intensities
   _maxIntensity = voxel_limits<irtkRealPixel>::min();
   _minIntensity = voxel_limits<irtkRealPixel>::max();
   for (unsigned int i = 0; i < _slices.size(); i++) {
@@ -220,6 +330,7 @@ void irtkReconstruction::InitializeEM() {
 }
 
 void irtkReconstruction::ParallelCoeffInit(int start, int end) {
+  cout << "start: " << start << " end: " << end <<  endl;
   for (size_t index = start; (int) index != end; ++index) {
 
     bool sliceInside;
@@ -476,13 +587,67 @@ void irtkReconstruction::ParallelCoeffInit(int start, int end) {
   }  
 }
 
+/*
+   void irtkReconstruction::ReturnFromCoeffInit(Messenger::NetworkId frontEndNid) {
+   int count = 0;
+   int info = 3;
+
+//TODO: Improve this count 
+for (int i = _start; i < _end; i++) {
+info++;
+for (int j = 0; j < (int) _volcoeffs[i].size() ;j++) {
+info++;
+for (int z = 0; z < (int)  _volcoeffs[i][j].size() ;z++) {
+info++;
+for (int k = 0; k < (int) _volcoeffs[i][j][z].size(); k++) {
+count++;
+}
+}
+}
+}
+
+auto buf = MakeUniqueIOBuf( info * sizeof(int) + count * sizeof(POINT3D));
+auto dp = buf->GetMutDataPointer();
+
+dp.Get<int>() = (int) COEFF_INIT;
+// Serialize
+dp.Get<int>() = _start;
+dp.Get<int>() = _end;
+for (int i = _start; i < _end; i++) {
+int jEnd = (int) _volcoeffs[i].size();
+dp.Get<int>() = jEnd;
+//cout << "i: " << i << " jEnd: " << jEnd << endl;
+for (int j = 0; j < jEnd; j++) {
+int zEnd = (int) _volcoeffs[i][j].size();
+dp.Get<int>() = zEnd;
+//cout << "i: " << i << " zEnd: " << zEnd << endl;
+for (int z = 0; z < zEnd ;z++) {
+int kEnd = (int) _volcoeffs[i][j][z].size();
+dp.Get<int>() = kEnd;
+if (i == 1) 
+cout << "i: " << i << " kEnd: " << kEnd << endl;
+for (int k = 0; k < kEnd; k++) {
+auto p = _volcoeffs[i][j][z][k];
+dp.Get<struct POINT3D>() = p;
+if (i == 1) 
+cout << "POINT3D: " << p.x << " " << p.y << " " << p.z << endl;
+}
+}
+}
+}
+
+//TODO: _volumeWeights 
+SendMessage(frontEndNid, std::move(buf));
+}
+*/
+
 void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
 
   auto parameters = StoreCoeffInitParameters(dp);
-  
+
   InitializeEM();
   InitializeEMValues();
-  
+
   _volcoeffs.clear();
   _volcoeffs.resize(_slices.size());
 
@@ -494,46 +659,48 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
   //cout << "nCPUs: " << nCPUs << endl;
   //cout << "numThreas: " << _numThreads << endl;
 
-	//int factor = (int)ceil(diff / (float)_numThreads);
-	int factor = (int)ceil(diff / (float)1);
-  int start = 0 * factor;
-  int end = 0 * factor + factor;
-  end = (end > diff) ? diff : end;
+  //int factor = (int)ceil(diff / (float)_numThreads);
+  int factor = (int)ceil(diff / (float)1);
+
+  //TODO: change this for multithread
+  int start = _start + (0 * factor);
+  int end = _start + (0 * factor) + factor;
+  end = (end > diff) ? _end : end;
   /*
 
-  size_t nCPUs = ebbrt::Cpu::Count();
-  static ebbrt::SpinBarrier bar(nCPUs);
-  ebbrt::EventManager::EventContext context;
-  std::atomic<size_t> count(0);
-  size_t mainCPU = ebbrt::Cpu::GetMine();
-  
-  cout << "nCPUs: " << nCPUs << endl;
-  for (size_t i = 0; i <  nCPUs; i++) {
-    cout << "indexToCPU(" << i << "): " << indexToCPU(i)
-    ebbrt::event_manager->SpawnRemote([nCPUs, &count, mainCPU, &context]{
-        size_t cpu = ebbrt::Cpu::GetMine();
+     size_t nCPUs = ebbrt::Cpu::Count();
+     static ebbrt::SpinBarrier bar(nCPUs);
+     ebbrt::EventManager::EventContext context;
+     std::atomic<size_t> count(0);
+     size_t mainCPU = ebbrt::Cpu::GetMine();
 
-        cout << "CPU: " << cpu << endl;
-	      
-        {
-          std::lock_guard<ebbrt::SpinLock> l(spinlock);
-        }
-        
-        count++;
+     cout << "nCPUs: " << nCPUs << endl;
+     for (size_t i = 0; i <  nCPUs; i++) {
+     cout << "indexToCPU(" << i << "): " << indexToCPU(i)
+     ebbrt::event_manager->SpawnRemote([nCPUs, &count, mainCPU, &context]{
+     size_t cpu = ebbrt::Cpu::GetMine();
 
-	      bar.Wait();
-        while (count < (size_t)nCPUs)
-        ;
+     cout << "CPU: " << cpu << endl;
+
+     {
+     std::lock_guard<ebbrt::SpinLock> l(spinlock);
+     }
+
+     count++;
+
+     bar.Wait();
+     while (count < (size_t)nCPUs)
+     ;
 
 
-        if (cpu == mainCPU) 
-          ebbrt::event_manager->ActivateContext(std::move(context));
+     if (cpu == mainCPU) 
+     ebbrt::event_manager->ActivateContext(std::move(context));
 
-        }, indexToCPU(i));
-  }
-  
-  ebbrt::event_manager->SaveContext(context);
- */
+     }, indexToCPU(i));
+     }
+
+     ebbrt::event_manager->SaveContext(context);
+     */
   ParallelCoeffInit(start, end);
 
   _volumeWeights.Initialize(_reconstructed.GetImageAttributes());
@@ -541,7 +708,7 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
 
   int i, j, n, k, inputIndex;
   POINT3D p;
-  for (inputIndex = 0; inputIndex < (int) _slices.size(); ++inputIndex) {
+  for (inputIndex = _start; inputIndex < (int) _end; ++inputIndex) {
     for (i = 0; i < _slices[inputIndex].GetX(); i++) {
       for (j = 0; j < _slices[inputIndex].GetY(); j++) {
         n = _volcoeffs[inputIndex][i][j].size();
@@ -568,7 +735,6 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
   }
   _averageVolumeWeight = sum / num;
 
-
   if (_debug) {
     cout << fixed << "_averageVolumeWeight: " << _averageVolumeWeight << endl;
     cout << fixed << "_volumeWeights: " << SumImage(_volumeWeights) << endl;
@@ -576,7 +742,7 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
 }
 
 void irtkReconstruction::GaussianReconstruction() {
-  unsigned int inputIndex;
+  int inputIndex;
   int i, j, k, n;
   irtkRealImage slice;
   double scale;
@@ -584,16 +750,16 @@ void irtkReconstruction::GaussianReconstruction() {
   vector<int> voxelNum;
   int sliceVoxNum;
 
-  voxelNum.resize(_end - _start);
-
   //clear _reconstructed image
   _reconstructed = 0;
 
-  for (inputIndex = _start; (int) inputIndex < _end; ++inputIndex) {
+  for (inputIndex = _start; inputIndex < _end; ++inputIndex) {
     slice = _slices[inputIndex];
     irtkRealImage& b = _bias[inputIndex];
     scale = _scaleCPU[inputIndex];
     sliceVoxNum = 0;
+    
+    _voxelNum.resize(_end-_start);
 
     //Distribute slice intensities to the volume
     for (i = 0; i < slice.GetX(); i++) {
@@ -620,7 +786,8 @@ void irtkReconstruction::GaussianReconstruction() {
         }
       }
     }
-    voxelNum[inputIndex - _start] = sliceVoxNum;
+
+    _voxelNum[inputIndex-_start] = sliceVoxNum;
   }
 
   //normalize the volume by proportion of contributing slice voxels
@@ -645,7 +812,7 @@ void irtkReconstruction::GaussianReconstruction() {
 }
 
 void irtkReconstruction::ParallelSimulateSlices(int start, int end) {
-  for (int inputIndex = start; inputIndex != end; ++inputIndex) {
+  for (int inputIndex = start; inputIndex < end; ++inputIndex) {
     _simulatedSlices[inputIndex].Initialize(
         _slices[inputIndex].GetImageAttributes());
 
@@ -658,15 +825,15 @@ void irtkReconstruction::ParallelSimulateSlices(int start, int end) {
 
     _simulatedInside[inputIndex].Initialize(
         _slices[inputIndex].GetImageAttributes());
-    
+
     _simulatedInside[inputIndex] = 0;
     _sliceInsideCPU[inputIndex] = 0;
 
     POINT3D p;
     for (unsigned int i = 0; (int) i < _slices[inputIndex].GetX();
-         i++) {
+        i++) {
       for (unsigned int j = 0; (int) j < _slices[inputIndex].GetY();
-           j++) {
+          j++) {
         if (_slices[inputIndex](i, j, 0) != -1) {
           double weight = 0;
           int n = _volcoeffs[inputIndex][i][j].size();
@@ -675,7 +842,7 @@ void irtkReconstruction::ParallelSimulateSlices(int start, int end) {
             p = _volcoeffs[inputIndex][i][j][k];
 
             _simulatedSlices[inputIndex](i, j, 0) +=
-                p.value * _reconstructed(p.x, p.y, p.z);
+              p.value * _reconstructed(p.x, p.y, p.z);
             weight += p.value;
 
             if (_mask(p.x, p.y, p.z) == 1) {
@@ -695,57 +862,10 @@ void irtkReconstruction::ParallelSimulateSlices(int start, int end) {
 }
 
 void irtkReconstruction::SimulateSlices() {
-  _simulatedSlices.resize(_end - _start);
-  _simulatedInside.resize(_end - _start);
-  _simulatedWeights.resize(_end - _start);
-  
+  _simulatedSlices.resize( _slices.size());
+  _simulatedInside.resize( _slices.size());
+  _simulatedWeights.resize(_slices.size()); 
   ParallelSimulateSlices(_start, _end);
-}
-
-
-void irtkReconstruction::DeserializeTransformations(
-    ebbrt::IOBuf::DataPointer& dp, irtkRigidTransformation& tmp) {
-  auto tx = dp.Get<double>();
-  auto ty = dp.Get<double>();
-  auto tz = dp.Get<double>();
-
-  auto rx = dp.Get<double>();
-  auto ry = dp.Get<double>();
-  auto rz = dp.Get<double>();
-
-  auto cosrx = dp.Get<double>();
-  auto cosry = dp.Get<double>();
-  auto cosrz = dp.Get<double>();
-
-  auto sinx = dp.Get<double>();
-  auto siny = dp.Get<double>();
-  auto sinz = dp.Get<double>();
-
-  auto status0 = dp.Get<int>();
-  auto status1 = dp.Get<int>();
-  auto status2 = dp.Get<int>();
-  auto status3 = dp.Get<int>();
-  auto status4 = dp.Get<int>();
-  auto status5 = dp.Get<int>();
-
-  auto rows = dp.Get<int>();
-  auto cols = dp.Get<int>();
-  auto ptr = std::make_unique<double[]>(rows * cols);
-  dp.Get(rows * cols * sizeof(double), (uint8_t*)ptr.get());
-  irtkMatrix mat(rows, cols, std::move(ptr));
-
-  irtkRigidTransformation irt(tx, ty, tz, rx, ry, rz, cosrx, cosry, cosrz, 
-      sinx, siny, sinz, status0, status1, status2, status3, status4, 
-      status5, mat);
-
-  tmp = std::move(irt);
-}
-
-void irtkReconstruction::DeserializeSliceVector(ebbrt::IOBuf::DataPointer& dp,
-    int nSlices) {
-  for (int i = 0; i < nSlices; i++) {
-    DeserializeSlice(dp, _slices[i]);
-  }
 }
 
 void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
@@ -753,68 +873,6 @@ void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
   auto dp = buf->GetMutDataPointer();
   dp.Get<int>() = fn;
   SendMessage(frontEndNid, std::move(buf));
-}
-
-
-void irtkReconstruction::DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, 
-    irtkRealImage& tmp) {
-  auto x = dp.Get<int>();
-  auto y = dp.Get<int>();
-  auto z = dp.Get<int>();
-  auto t = dp.Get<int>();
-
-  auto dx = dp.Get<double>();
-  auto dy = dp.Get<double>();
-  auto dz = dp.Get<double>();
-  auto dt = dp.Get<double>();
-
-  auto xorg = dp.Get<double>();
-  auto yorg = dp.Get<double>();
-  auto zorg = dp.Get<double>();
-  auto torg = dp.Get<double>();
-
-  auto xa0 = dp.Get<double>();
-  auto xa1 = dp.Get<double>();
-  auto xa2 = dp.Get<double>();
-
-  auto ya0 = dp.Get<double>();
-  auto ya1 = dp.Get<double>();
-  auto ya2 = dp.Get<double>();
-
-  auto za0 = dp.Get<double>();
-  auto za1 = dp.Get<double>();
-  auto za2 = dp.Get<double>();
-
-  irtkImageAttributes at(
-      x, y, z, t,
-      dx, dy, dz, dt,
-      xorg, yorg, zorg, torg,
-      xa0, xa1, xa2, ya0,
-      ya1, ya2, za0, za1,
-      za2
-      );
-
-  auto rows = dp.Get<int>();
-  auto cols = dp.Get<int>();
-  //auto ptr = new double[rows * cols];
-  auto ptr = std::make_unique<double[]>(rows * cols);
-  dp.Get(rows * cols * sizeof(double), (uint8_t*)ptr.get());
-  irtkMatrix matI2W(rows, cols, std::move(ptr));
-
-  rows = dp.Get<int>();
-  cols = dp.Get<int>();
-  //ptr = new double[rows * cols];
-  ptr = std::make_unique<double[]>(rows * cols);
-  dp.Get(rows * cols * sizeof(double), (uint8_t*)ptr.get());
-  irtkMatrix matW2I(rows, cols, std::move(ptr));
-
-  auto n = dp.Get<int>();
-  auto ptr2 = new double[n];
-  dp.Get(n*sizeof(double), (uint8_t*)ptr2);
-
-  irtkRealImage ri(at, ptr2, matI2W, matW2I);
-
-  tmp = std::move(ri);
 }
 
 void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
@@ -831,11 +889,12 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
         //TODO: delete prints
         cout << "-----------------------------" << endl;
         cout << "After COEFF_INIT" << endl;
-        PrintImageSums(); 
-        PrintAttributeVectorSums();
-        for (int i = 0; i < (int) _transformations.size(); i++)
-          _transformations[i].PrintTransformation();
-        ReturnFrom(COEFF_INIT, nid);
+        //PrintImageSums(); 
+        //PrintAttributeVectorSums();
+        //for (int i = 0; i < (int) _transformations.size(); i++)
+        //  _transformations[i].PrintTransformation();
+
+        ReturnFrom(COEFF_INIT,nid);
         break;
       }
     case GAUSSIAN_RECONSTRUCTION:
@@ -866,7 +925,7 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
         PrintVectorSums(_simulatedWeights, "Simulated Weights");
         PrintVectorSums(_simulatedInside, "Simulated Inside");
 
-        cout << "Reconstructed: " << SumImage(_reconstructed) << endl;
+        cout << fixed << "Reconstructed: " << SumImage(_reconstructed) << endl;
 
         break;
       }
