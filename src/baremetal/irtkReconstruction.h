@@ -109,10 +109,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     // Reconstruction functions
     void CoeffInit(ebbrt::IOBuf::DataPointer& dp);
 
-    void ParallelCoeffInit(int start, int end);
+    void ParallelCoeffInit();
 
-    //void ReturnFromCoeffInit(ebbrt::Messenger::NetworkId frontEndNid);
-    
     void ReturnFrom(int fn, ebbrt::Messenger::NetworkId frontEndNid);
 
     void StoreParameters(struct reconstructionParameters parameters);
@@ -126,13 +124,11 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void GaussianReconstruction();
     
-    void ExcludeSlicesWithOverlap();
-    
     void ReturnFromGaussianReconstruction(ebbrt::Messenger::NetworkId frontEndNid);
 
-    void ParallelSimulateSlices(int start, int end);
+    void ParallelSimulateSlices();
 
-    void SimulateSlices();
+    void SimulateSlices(ebbrt::IOBuf::DataPointer& dp);
 
     // Debugging functions
     inline double SumImage(irtkRealImage img);
@@ -174,7 +170,7 @@ inline void irtkReconstruction::PrintImageSums() {
 
 inline void irtkReconstruction::PrintVectorSums(vector<irtkRealImage> images, 
     string name) {
-  for (int i = 0; i < (int) images.size(); i++) {
+  for (int i = _start; i < _end; i++) {
     cout << fixed << name << "[" << i << "]: " << SumImage(images[i]) << endl;
   }
 }

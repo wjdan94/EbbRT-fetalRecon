@@ -1244,6 +1244,22 @@ void irtkReconstruction::CoeffInit(int iteration) {
   }
 }
 
+void irtkReconstruction::ExcludeSlicesWithOverlap() {
+  vector<int> voxelNumTmp;
+  for (int i = 0; i < (int) _voxelNum.size(); i++)
+    voxelNumTmp.push_back(_voxelNum[i]);
+
+  //find median
+  sort(voxelNumTmp.begin(), voxelNumTmp.end());
+  int median = voxelNumTmp[round(voxelNumTmp.size()*0.5)];
+
+  //remember slices with small overlap with ROI
+  _smallSlices.clear();
+  for (int i = 0; i < (int) _voxelNum.size(); i++)
+    if (_voxelNum[i] < 0.1*median)
+      _smallSlices.push_back(i);
+}
+
 void irtkReconstruction::GaussianReconstruction() {
 
   _voxelNum.resize(_slices.size());
@@ -1271,6 +1287,8 @@ void irtkReconstruction::GaussianReconstruction() {
 
   _reconstructed /= _volumeWeights;
 
+  ExcludeSlicesWithOverlap();
+
   if (_debug) {
     cout << "---------------------------------------" << endl;
     cout << "       GAUSSIAN RECONSTRUCTION         " << endl;
@@ -1284,10 +1302,9 @@ void irtkReconstruction::SimulateSlices() {
   for (int i = 0; i < (int) _nids.size(); i++) {
     auto buf = MakeUniqueIOBuf(sizeof(int));
     auto dp = buf->GetMutDataPointer();
-    dp.Get<int>() = 2;
 
-    // TODO: verify if the reconstructed volume must be sent
-    //buf->PrependChain(std::move(serializeSlices(_reconstructed)));
+    dp.Get<int>() = 2;
+    buf->PrependChain(std::move(serializeSlices(_reconstructed)));
 
     _totalBytes += buf->ComputeChainDataLength();
     SendMessage(_nids[i], std::move(buf));

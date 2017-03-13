@@ -222,6 +222,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     //GaussianReconstruction() function
     void GaussianReconstruction();
 
+    void ExcludeSlicesWithOverlap();
+
     void AssembleImage(ebbrt::IOBuf::DataPointer & dp);
 
     void ReturnFromGaussianReconstruction(ebbrt::IOBuf::DataPointer & dp);

@@ -1,5 +1,7 @@
 #include "irtkReconstruction.h"
 
+#pragma GCC diagnostic ignored "-Wsign-compare"
+
 static size_t indexToCPU(size_t i) { return i; }
 ebbrt::SpinLock spinlock;
 
@@ -344,12 +346,12 @@ void irtkReconstruction::InitializeEM() {
   }
 }
 
-void irtkReconstruction::ParallelCoeffInit(int start, int end) {
+void irtkReconstruction::ParallelCoeffInit() {
   if (_debug) {
-    cout << "[ParallelCoeffInit] "  << "start: " << start << " end: " << end <<  endl;
+    cout << "[ParallelCoeffInit] "  << "start: " << _start << " end: " << _end <<  endl;
   }
   
-  for (size_t index = start; (int) index != end; ++index) {
+  for (size_t index = _start; (int) index != _end; ++index) {
 
     bool sliceInside;
 
@@ -660,7 +662,7 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
 
      ebbrt::event_manager->SaveContext(context);
      */
-  ParallelCoeffInit(start, end);
+  ParallelCoeffInit();
 
   _volumeWeights.Initialize(_reconstructed.GetImageAttributes());
   _volumeWeights = 0;
@@ -743,24 +745,9 @@ void irtkReconstruction::GaussianReconstruction() {
   }
 }
 
-void irtkReconstruction::ExcludeSlicesWithOverlap() {
-  vector<int> voxelNumTmp;
-  for (int i = 0; i < (int) _voxelNum.size(); i++)
-    voxelNumTmp.push_back(_voxelNum[i]);
+void irtkReconstruction::ParallelSimulateSlices() {
 
-  //find median
-  sort(voxelNumTmp.begin(), voxelNumTmp.end());
-  int median = voxelNumTmp[round(voxelNumTmp.size()*0.5)];
-
-  //remember slices with small overlap with ROI
-  _smallSlices.clear();
-  for (int i = 0; i < (int) _voxelNum.size(); i++)
-    if (_voxelNum[i] < 0.1*median)
-      _smallSlices.push_back(i);
-}
-
-void irtkReconstruction::ParallelSimulateSlices(int start, int end) {
-  for (int inputIndex = start; inputIndex < end; ++inputIndex) {
+  for (int inputIndex = _start; inputIndex < _end; ++inputIndex) {
     _simulatedSlices[inputIndex].Initialize(
         _slices[inputIndex].GetImageAttributes());
 
@@ -809,11 +796,23 @@ void irtkReconstruction::ParallelSimulateSlices(int start, int end) {
   }
 }
 
-void irtkReconstruction::SimulateSlices() {
-  _simulatedSlices.resize( _slices.size());
-  _simulatedInside.resize( _slices.size());
-  _simulatedWeights.resize(_slices.size()); 
-  ParallelSimulateSlices(_start, _end);
+void irtkReconstruction::SimulateSlices(ebbrt::IOBuf::DataPointer& dp) {
+      
+  _simulatedSlices.clear();
+  _simulatedWeights.clear();
+  _simulatedInside.clear();
+
+  for(int i= 0 ; i < (int) _slices.size(); i++) {
+    _simulatedSlices.push_back(_slices[i]);
+	  _simulatedWeights.push_back(_slices[i]);
+    _simulatedInside.push_back(_slices[i]);
+  }
+
+  int reconSize = dp.Get<int>();
+  dp.Get(reconSize*sizeof(double), (uint8_t*)_reconstructed.GetMat());
+
+
+  ParallelSimulateSlices();
 }
 
 void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
@@ -906,24 +905,22 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
           cout << "---------------------------------------" << endl;
         }
 
-        SimulateSlices();
+        SimulateSlices(dp);
         ReturnFrom(SIMULATE_SLICES, nid);
 
         if (_debug) {
           cout << "---------------------------------------" << endl;
           cout << "           SIMULATE SLICES             " << endl;
           PrintImageSums();
+          PrintVectorSums(_simulatedSlices, "Simulated Slices");
+          PrintVectorSums(_simulatedWeights, "Simulated Weights");
+          PrintVectorSums(_simulatedInside, "Simulated Inside");
           cout << "---------------------------------------" << endl;
         }
         
         /*
         for (int i = 0; i < (int) _transformations.size(); i++)
           _transformations[i].PrintTransformation();
-
-        PrintVectorSums(_simulatedSlices, "Simulated Slices");
-        PrintVectorSums(_simulatedWeights, "Simulated Weights");
-        PrintVectorSums(_simulatedInside, "Simulated Inside");
-        cout << fixed << "Reconstructed: " << SumImage(_reconstructed) << endl;
         */
 
         break;
