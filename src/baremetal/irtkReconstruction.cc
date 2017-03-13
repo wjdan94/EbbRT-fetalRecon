@@ -815,6 +815,37 @@ void irtkReconstruction::SimulateSlices(ebbrt::IOBuf::DataPointer& dp) {
   ParallelSimulateSlices();
 }
 
+void irtkReconstruction::InitializeRobustStatistics(double& sigma, int& num) {
+  int i, j;
+  irtkRealImage slice, sim;
+  sigma = 0.0;
+  num = 0;
+  
+  for (unsigned int inputIndex = _start; inputIndex < _end; inputIndex++) {
+    slice = _slices[inputIndex];
+
+    // [fetalRecontruction] Voxel-wise sigma will be set to stdev of volumetric 
+    // [fetalRecontruction] errors
+    for (i = 0; i < slice.GetX(); i++)
+      for (j = 0; j < slice.GetY(); j++)
+        if (slice(i, j, 0) != -1) {
+          // [fetalRecontruction] calculate stev of the errors
+          if ((_simulatedInside[inputIndex](i, j, 0) == 1) &&
+              (_simulatedWeights[inputIndex](i, j, 0) > 0.99)) {
+            slice(i, j, 0) -= _simulatedSlices[inputIndex](i, j, 0);
+            sigma += slice(i, j, 0) * slice(i, j, 0);
+            num++;
+          }
+        }
+
+    // [fetalRecontruction] if slice does not have an overlap with ROI, 
+    // [fetalRecontruction] set its weight to zero
+    if (!_sliceInsideCPU[inputIndex])
+      _sliceWeightCPU[inputIndex] = 0;
+  }
+  
+}
+
 void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
   auto buf = MakeUniqueIOBuf(sizeof(int));
   auto dp = buf->GetMutDataPointer();
@@ -844,7 +875,19 @@ void irtkReconstruction::ReturnFromGaussianReconstruction(Messenger::NetworkId f
   SendMessage(frontEndNid, std::move(buf));
 }
 
-void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
+void irtkReconstruction::ReturnFromInitializeRobustStatistics(double& sigma, int& num, 
+    Messenger::NetworkId frontEndNid) {
+  auto buf = MakeUniqueIOBuf((2 * sizeof(int)) + (1 * sizeof(double)));
+  auto dp = buf->GetMutDataPointer();
+  
+  dp.Get<int>() = INITIALIZE_ROBUST_STATISTICS;
+  dp.Get<int>() = num;
+  dp.Get<double>() = sigma;
+
+  SendMessage(frontEndNid, std::move(buf));
+}
+
+void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
     std::unique_ptr<IOBuf> &&buffer) {
   auto dp = buffer->GetDataPointer();
   auto fn = dp.Get<int>();
@@ -922,6 +965,34 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
         for (int i = 0; i < (int) _transformations.size(); i++)
           _transformations[i].PrintTransformation();
         */
+
+        break;
+      }
+    case INITIALIZE_ROBUST_STATISTICS:
+      {
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "     INITIALIZE ROBUST STATISTICS      " << endl;
+          cout << "---------------------------------------" << endl;
+        }
+       
+        double sigma;
+        int num;
+        InitializeRobustStatistics(sigma, num);
+        ReturnFromInitializeRobustStatistics(sigma, num, nid);
+        
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "     INITIALIZE ROBUST STATISTICS      " << endl;
+          cout << "sigma: " << sigma << endl;
+          cout << "num: " << num << endl; 
+          PrintVectorSums(_slices, "Slices");
+          PrintVectorSums(_simulatedWeights, "Simulated Weights");
+          PrintVectorSums(_simulatedInside, "Simulated Inside");
+          PrintVector(_sliceInsideCPU, "Slice Inside CPU");
+          PrintVector(_sliceWeightCPU, "Slice Weight CPU");
+          cout << "---------------------------------------" << endl;
+        }
 
         break;
       }

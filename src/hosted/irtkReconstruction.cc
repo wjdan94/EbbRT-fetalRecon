@@ -431,6 +431,14 @@ void irtkReconstruction::ReturnFromSimulateSlices(
   ReturnFrom();
 }
 
+void irtkReconstruction::ReturnFromInitializeRobustStatistics(
+    ebbrt::IOBuf::DataPointer & dp) {
+  int num = dp.Get<int>();
+  double sigma = dp.Get<double>();
+  _sigmaSum += sigma;
+  _numSum += num;
+  ReturnFrom();
+}
 
 irtkRealImage irtkReconstruction::CreateMask(irtkRealImage image) {
   // [fetalRecontruction] binarize mask
@@ -1131,6 +1139,8 @@ void irtkReconstruction::Execute() {
     GaussianReconstruction();
 
     SimulateSlices();
+
+    InitializeRobustStatistics();
   }
 }
 
@@ -1270,7 +1280,7 @@ void irtkReconstruction::GaussianReconstruction() {
   for (int i = 0; i < (int) _numBackendNodes; i++) {
     auto buf = MakeUniqueIOBuf(sizeof(int));
     auto dp = buf->GetMutDataPointer();
-    dp.Get<int>() = 1;
+    dp.Get<int>() = GAUSSIAN_RECONSTRUCTION;
 
     _totalBytes += buf->ComputeChainDataLength();
     SendMessage(_nids[i], std::move(buf));
@@ -1303,7 +1313,7 @@ void irtkReconstruction::SimulateSlices() {
     auto buf = MakeUniqueIOBuf(sizeof(int));
     auto dp = buf->GetMutDataPointer();
 
-    dp.Get<int>() = 2;
+    dp.Get<int>() = SIMULATE_SLICES;
     buf->PrependChain(std::move(serializeSlices(_reconstructed)));
 
     _totalBytes += buf->ComputeChainDataLength();
@@ -1323,6 +1333,43 @@ void irtkReconstruction::SimulateSlices() {
     cout << "---------------------------------------" << endl;
     cout << "           SIMULATE SLICES             " << endl;
     PrintImageSums();
+    cout << "---------------------------------------" << endl;
+  }
+}
+
+void irtkReconstruction::InitializeRobustStatistics() {
+
+  _sigmaSum = 0;
+  _numSum = 0;
+
+  for (int i = 0; i < (int) _nids.size(); i++) {
+    auto buf = MakeUniqueIOBuf(sizeof(int));
+    auto dp = buf->GetMutDataPointer();
+
+    dp.Get<int>() = INITIALIZE_ROBUST_STATISTICS;
+
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
+
+  _future = ebbrt::Promise<int>();
+  auto f = _future.GetFuture();
+  if (_debug)
+    cout << "InitializeRobustStatistics(): Blocking" << endl;
+
+  f.Block();
+  if (_debug)
+    cout << "InitializeRobustStatistics(): Returned from future" << endl;
+
+  _sigmaCPU = _sigmaSum / _numSum;
+  _mCPU = 1 / (2.1 * _maxIntensity - 1.9 * _minIntensity);
+
+  if (_debug) {
+    cout << "---------------------------------------" << endl;
+    cout << "     INITIALIZE ROBUST STATISTICS      " << endl;
+    PrintImageSums();
+    cout << "_sigmaCPU: " << _sigmaCPU << endl;
+    cout << "_mCPU: " << _mCPU << endl;
     cout << "---------------------------------------" << endl;
   }
 }
@@ -1394,6 +1441,11 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
     case SIMULATE_SLICES:
       {
         ReturnFromSimulateSlices(dp);
+        break;
+      }
+    case INITIALIZE_ROBUST_STATISTICS:
+      {
+        ReturnFromInitializeRobustStatistics(dp);
         break;
       }
     default:

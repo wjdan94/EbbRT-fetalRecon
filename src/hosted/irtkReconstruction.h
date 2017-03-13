@@ -112,6 +112,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     int _tnum;
     int _totalBytes;
     int _received;
+    int _numSum;
 
     double _qualityFactor;
     double _step; 
@@ -124,6 +125,9 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     double _tmax;
     double _maxIntensity;
     double _minIntensity;
+    double _sigmaCPU;
+    double _sigmaSum;
+    double _mCPU;
 
     bool _templateCreated;
     bool _haveMask;
@@ -232,6 +236,11 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void SimulateSlices();
 
     void ReturnFromSimulateSlices(ebbrt::IOBuf::DataPointer & dp);
+
+    // InitializeRobustStatistics() function
+    void InitializeRobustStatistics();
+
+    void ReturnFromInitializeRobustStatistics(ebbrt::IOBuf::DataPointer & dp);
     
     // Start program execution
     void Execute();

@@ -4,6 +4,8 @@
 #define COEFF_INIT 0
 #define GAUSSIAN_RECONSTRUCTION 1
 #define SIMULATE_SLICES 2
+#define INITIALIZE_ROBUST_STATISTICS 3
+
 #define ITERATION_DONE 14
 
 struct reconstructionParameters {

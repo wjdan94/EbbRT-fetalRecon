@@ -130,12 +130,20 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void SimulateSlices(ebbrt::IOBuf::DataPointer& dp);
 
+    void InitializeRobustStatistics(double& sigma, int& num);
+
+    void ReturnFromInitializeRobustStatistics(double& sigma, 
+        int& num, Messenger::NetworkId nid);
+
     // Debugging functions
     inline double SumImage(irtkRealImage img);
 
     inline void PrintImageSums();
 
     inline void PrintVectorSums(vector<irtkRealImage> images, string name);
+    
+    inline void PrintVector(vector<double> vec, string name);
+    inline void PrintVector(vector<int> vec, string name);
 
     inline void PrintAttributeVectorSums();
     
@@ -172,6 +180,20 @@ inline void irtkReconstruction::PrintVectorSums(vector<irtkRealImage> images,
     string name) {
   for (int i = _start; i < _end; i++) {
     cout << fixed << name << "[" << i << "]: " << SumImage(images[i]) << endl;
+  }
+}
+
+inline void irtkReconstruction::PrintVector(vector<double> vec, 
+    string name) {
+  for (int i = _start; i < _end; i++) {
+    cout << fixed << name << "[" << i << "]: " << vec[i] << endl;
+  }
+}
+
+inline void irtkReconstruction::PrintVector(vector<int> vec, 
+    string name) {
+  for (int i = _start; i < _end; i++) {
+    cout << fixed << name << "[" << i << "]: " << vec[i] << endl;
   }
 }
 
