@@ -61,6 +61,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     double _maxIntensity;
     double _minIntensity;
     double _averageVolumeWeight;
+    double _mCPU;
+    double _sigmaCPU;
 
     bool _adaptive;
 
@@ -107,12 +109,11 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
         std::unique_ptr<ebbrt::IOBuf>&& buffer);
 
     // Reconstruction functions
+    // CoeffInit functions
     void CoeffInit(ebbrt::IOBuf::DataPointer& dp);
 
     void ParallelCoeffInit();
-
-    void ReturnFrom(int fn, ebbrt::Messenger::NetworkId frontEndNid);
-
+    
     void StoreParameters(struct reconstructionParameters parameters);
 
     struct coeffInitParameters StoreCoeffInitParameters(
@@ -121,19 +122,52 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void InitializeEMValues();
 
     void InitializeEM();
+    
+    void ReturnFromCoeffInit(ebbrt::Messenger::NetworkId frontEndNid);
 
+    // GaussianReconstruction function
     void GaussianReconstruction();
     
     void ReturnFromGaussianReconstruction(ebbrt::Messenger::NetworkId frontEndNid);
 
+    // SimulateSlices functions
     void ParallelSimulateSlices();
 
     void SimulateSlices(ebbrt::IOBuf::DataPointer& dp);
+    
+    void ReturnFromSimulateSlicest(ebbrt::Messenger::NetworkId frontEndNid);
 
+    // RobustStatistics functions
     void InitializeRobustStatistics(double& sigma, int& num);
 
     void ReturnFromInitializeRobustStatistics(double& sigma, 
         int& num, Messenger::NetworkId nid);
+
+    // EStep function
+    void StoreEStepParameters(ebbrt::IOBuf::DataPointer& dp);
+
+    double G(double x, double s);
+
+    double M(double m);
+
+    void ParallelEStep(struct eStepReturnParameters& parameters);
+
+    struct eStepReturnParameters EStepI(ebbrt::IOBuf::DataPointer& dp);
+    
+    struct eStepReturnParameters EStepII(ebbrt::IOBuf::DataPointer& dp);
+
+    struct eStepReturnParameters EStepIII(ebbrt::IOBuf::DataPointer& dp);
+
+    void ReturnFromEStepI(struct eStepReturnParameters parameters, 
+        Messenger::NetworkId nid);
+    
+    void ReturnFromEStepII(struct eStepReturnParameters parameters, 
+        Messenger::NetworkId nid);
+
+    void ReturnFromEStepIII(struct eStepReturnParameters parameters, 
+        Messenger::NetworkId nid);
+    
+    void ReturnFrom(int fn, ebbrt::Messenger::NetworkId frontEndNid);
 
     // Debugging functions
     inline double SumImage(irtkRealImage img);

@@ -139,6 +139,17 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     double* _reconstructedDoublePtr = NULL;
     double* _volumeWeightsDoublePtr = NULL;
 
+    // EStep() variables
+    double _sum;
+    double _num;
+    double _den;
+    double _den2;
+    double _sum2;
+    double _maxs;
+    double _mins;
+    double _meanSCPU;
+    double _meanS2CPU;
+
   public:
 
     // Constructor
@@ -237,10 +248,25 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void ReturnFromSimulateSlices(ebbrt::IOBuf::DataPointer & dp);
 
-    // InitializeRobustStatistics() function
+    //InitializeRobustStatistics() function
     void InitializeRobustStatistics();
 
     void ReturnFromInitializeRobustStatistics(ebbrt::IOBuf::DataPointer & dp);
+
+    //EStep() function 
+    void EStepI();
+
+    void EStepII();
+
+    void EStepIII();
+
+    void EStep();
+
+    void ReturnFromEStepI(ebbrt::IOBuf::DataPointer & dp);
+
+    void ReturnFromEStepII(ebbrt::IOBuf::DataPointer & dp);
+
+    void ReturnFromEStepIII(ebbrt::IOBuf::DataPointer & dp);
     
     // Start program execution
     void Execute();

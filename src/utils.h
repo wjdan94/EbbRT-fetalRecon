@@ -31,6 +31,7 @@ struct SLICEINFO
     float value; //value
 };
 
+/*
 enum TTYPE {
   INITIALIZEEMVALUES,
   COEFFINIT,
@@ -46,6 +47,7 @@ enum TTYPE {
   SLICETOVOLUMEREGISTRATION,
   RESTORESLICE
 };
+*/
 
 typedef std::vector<POINT3D> VOXELCOEFFS;
 typedef std::vector<std::vector<VOXELCOEFFS> > SLICECOEFFS;

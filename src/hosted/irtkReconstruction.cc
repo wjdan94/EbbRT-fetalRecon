@@ -421,8 +421,7 @@ void irtkReconstruction::ReturnFromGaussianReconstruction(
   ReturnFrom();
 }
 
-void irtkReconstruction::ReturnFromCoeffInit(
-    ebbrt::IOBuf::DataPointer & dp) {
+void irtkReconstruction::ReturnFromCoeffInit(ebbrt::IOBuf::DataPointer & dp) {
   ReturnFrom();
 }
 
@@ -437,6 +436,42 @@ void irtkReconstruction::ReturnFromInitializeRobustStatistics(
   double sigma = dp.Get<double>();
   _sigmaSum += sigma;
   _numSum += num;
+  ReturnFrom();
+}
+
+void irtkReconstruction::ReturnFromEStepI(ebbrt::IOBuf::DataPointer & dp) {
+
+  auto parameters = dp.Get<struct eStepReturnParameters>();
+
+  _sum += parameters.sum;
+  _den += parameters.den;
+  _den2 += parameters.den2;
+  _sum2 += parameters.sum2;
+  _maxs = (_maxs > parameters.maxs) ? _maxs : parameters.maxs;
+  _mins= (_mins < parameters.maxs) ? _mins : parameters.mins;
+  
+  ReturnFrom();
+}
+
+void irtkReconstruction::ReturnFromEStepII(ebbrt::IOBuf::DataPointer & dp) {
+
+  auto parameters = dp.Get<struct eStepReturnParameters>();
+
+  _sum += parameters.sum;
+  _den += parameters.den;
+  _den2 += parameters.den2;
+  _sum2 += parameters.sum2;
+
+  ReturnFrom();
+}
+
+void irtkReconstruction::ReturnFromEStepIII(ebbrt::IOBuf::DataPointer & dp) {
+
+  auto parameters = dp.Get<struct eStepReturnParameters>();
+
+  _sum += parameters.sum;
+  _num += parameters.num;
+
   ReturnFrom();
 }
 
@@ -1141,6 +1176,8 @@ void irtkReconstruction::Execute() {
     SimulateSlices();
 
     InitializeRobustStatistics();
+
+    EStep();
   }
 }
 
@@ -1374,6 +1411,204 @@ void irtkReconstruction::InitializeRobustStatistics() {
   }
 }
 
+void irtkReconstruction::EStepI() {
+  struct eStepParameters parameters;
+
+  parameters.mCPU = _mCPU;
+  parameters.sigmaCPU = _sigmaCPU;
+
+  _sum = 0.0;
+  _den = 0.0;
+  _den2 = 0.0;
+  _sum2 = 0.0;
+  _maxs = 0.0;
+  _mins = 1.0;
+
+  for (int i = 0; i < (int) _nids.size(); i++) {
+    auto buf = MakeUniqueIOBuf((2 * sizeof(int)) + 
+        sizeof(struct eStepParameters));
+    auto dp = buf->GetMutDataPointer();
+
+    dp.Get<int>() = E_STEP_I;
+    dp.Get<struct eStepParameters>() = parameters; 
+    dp.Get<int>() = _smallSlices.size();
+	
+    auto smallSlicesData = std::make_unique<StaticIOBuf>(
+        reinterpret_cast<const uint8_t *>(_smallSlices.data()),
+        (size_t)(_smallSlices.size() * sizeof(int)));
+
+    buf->PrependChain(std::move(smallSlicesData));
+
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
+  
+  _future = ebbrt::Promise<int>();
+  auto f = _future.GetFuture();
+  if (_debug)
+    cout << "EStepI(): Blocking" << endl;
+
+  f.Block();
+  if (_debug) {
+    cout << "EStepI(): Returned from future" << endl;
+    
+    cout << "---------------------------------------" << endl;
+    cout << "                ESTEP_I                " << endl;
+    cout << "_sum: " << _sum << endl;
+    cout << "_den: " << _den << endl;
+    cout << "_den2: " << _den2 << endl;
+    cout << "_sum2: " << _sum2 << endl;
+    cout << "_maxs: " << _maxs << endl;
+    cout << "_mins: " << _mins << endl;
+  }
+
+  if (_den > 0)
+    _meanSCPU = _sum / _den;
+  else
+    _meanSCPU = _mins;
+
+  if (_den2 > 0)
+    _meanS2CPU = _sum2 / _den2;
+  else
+    _meanS2CPU = (_maxs + _meanSCPU) / 2;
+
+  if (_debug) {
+    cout << "_meanSCPU: " << _meanSCPU << endl;
+    cout << "_meanS2CPU: " << _meanS2CPU << endl;
+    cout << "---------------------------------------" << endl;
+  }
+}
+
+void irtkReconstruction::EStepII() {
+
+  _sum = 0.0;
+  _den = 0.0;
+  _den2 = 0.0;
+  _sum2 = 0.0;
+
+  struct eStepParameters parameters;
+  
+  parameters.meanSCPU = _meanSCPU;
+  parameters.meanS2CPU = _meanS2CPU;
+
+  for (int i = 0; i < (int) _nids.size(); i++) {
+    auto buf = MakeUniqueIOBuf(sizeof(int) + 
+        sizeof(struct eStepParameters));
+    auto dp = buf->GetMutDataPointer();
+
+    dp.Get<int>() = E_STEP_II;
+    dp.Get<struct eStepParameters>() = parameters; 
+	
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
+
+  _future = ebbrt::Promise<int>();
+  auto f = _future.GetFuture();
+  if (_debug)
+    cout << "EStepII(): Blocking" << endl;
+
+  f.Block();
+  if (_debug) 
+    cout << "EStepII(): Returned from future" << endl;
+
+  if (_debug) {
+    cout << "---------------------------------------" << endl;
+    cout << "                ESTEP_II               " << endl;
+    cout << "_sum: " << _sum << endl;
+    cout << "_den: " << _den << endl;
+    cout << "_den2: " << _den2 << endl;
+    cout << "_sum2: " << _sum2 << endl;
+  }
+
+  // [fetalRecontruction] do not allow too small sigma
+  double sigmaFactor = 6.28;
+
+  if ((_sum > 0) && (_den > 0)) {
+    _sigmaSCPU = _sum / _den;
+    if (_sigmaSCPU < _step * _step / sigmaFactor)
+      _sigmaSCPU = _step * _step / sigmaFactor;
+  } else {
+    _sigmaSCPU = 0.025;
+  }
+
+  if ((_sum2 > 0) && (_den2 > 0)) {
+    _sigmaS2CPU = _sum2 / _den2;
+    if (_sigmaS2CPU < _step * _step / sigmaFactor)
+      _sigmaS2CPU = _step * _step / sigmaFactor;
+  } else {
+    _sigmaS2CPU = (_meanS2CPU - _meanSCPU) * (_meanS2CPU - _meanSCPU) / 4;
+    if (_sigmaS2CPU < _step * _step / sigmaFactor)
+      _sigmaS2CPU = _step * _step / sigmaFactor;
+  }
+
+  if (_debug) {
+    cout << "_sigmaSCPU: " << _sigmaSCPU << endl;
+    cout << "_sigmaS2CPU: " << _sigmaS2CPU << endl;
+    cout << "---------------------------------------" << endl;
+  }
+}
+
+void irtkReconstruction::EStepIII() {
+
+  _sum = 0.0;
+  _num = 0.0;
+
+  struct eStepParameters parameters;
+  
+  parameters.meanSCPU = _meanSCPU;
+  parameters.meanS2CPU = _meanS2CPU;
+  parameters.sigmaSCPU = _sigmaSCPU;
+  parameters.sigmaS2CPU = _sigmaS2CPU;
+  parameters.den = _den;
+
+  for (int i = 0; i < (int) _nids.size(); i++) {
+    auto buf = MakeUniqueIOBuf(sizeof(int) + 
+        sizeof(struct eStepParameters));
+    auto dp = buf->GetMutDataPointer();
+
+    dp.Get<int>() = E_STEP_III;
+    dp.Get<struct eStepParameters>() = parameters; 
+	
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
+
+  _future = ebbrt::Promise<int>();
+  auto f = _future.GetFuture();
+  if (_debug)
+    cout << "EStepIII(): Blocking" << endl;
+
+  f.Block();
+  if (_debug) 
+    cout << "EStepIII(): Returned from future" << endl;
+
+  if (_debug) {
+    cout << "---------------------------------------" << endl;
+    cout << "                ESTEP_III              " << endl;
+    cout << "_sum: " << _sum << endl;
+    cout << "_num: " << _num << endl;
+  }
+
+  if (_num > 0)
+    _mixSCPU = _sum / _num;
+  else
+    _mixSCPU = 0.9;
+
+  if (_debug) {
+    cout << "_mixSCPU: " << _mixSCPU << endl;
+    cout << "---------------------------------------" << endl;
+  }
+}
+
+void irtkReconstruction::EStep() {
+  EStepI();
+
+  EStepII();
+
+  EStepIII();
+}
+
 void irtkReconstruction::InitializeEMValues() {
   for (int i = 0; i < _slices.size(); i++) {
     // [fetalRecontruction] Initialize voxel weights and bias values
@@ -1446,6 +1681,21 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
     case INITIALIZE_ROBUST_STATISTICS:
       {
         ReturnFromInitializeRobustStatistics(dp);
+        break;
+      }
+    case E_STEP_I:
+      {
+        ReturnFromEStepI(dp);
+        break;
+      }
+    case E_STEP_II:
+      {
+        ReturnFromEStepII(dp);
+        break;
+      }
+    case E_STEP_III:
+      {
+        ReturnFromEStepIII(dp);
         break;
       }
     default:
