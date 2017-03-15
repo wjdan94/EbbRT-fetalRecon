@@ -57,7 +57,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     double _sigmaS2CPU;
     double _mixSCPU;
     double _mixCPU;
-    double _alpha;
+    //double _alpha;
     double _maxIntensity;
     double _minIntensity;
     double _averageVolumeWeight;
@@ -93,6 +93,11 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     vector<irtkRealImage> _simulatedWeights;
 
     vector<SLICECOEFFS> _volcoeffs;
+
+
+    // SuperResolution variables
+    irtkRealImage _addon;
+    irtkRealImage _confidenceMap;
 
   public:
     // Constructor
@@ -166,7 +171,23 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void ReturnFromEStepIII(struct eStepReturnParameters parameters, 
         Messenger::NetworkId nid);
+
+    // Scale functions
     
+    void ParallelScale();
+
+    void Scale();
+
+    void ReturnFromScale(Messenger::NetworkId nid);
+
+    // Superresolution functions
+    
+    void ParallelSuperresolution();
+
+    void SuperResolution(ebbrt::IOBuf::DataPointer& dp);
+
+    void ReturnFromSuperResolution(Messenger::NetworkId nid);
+
     void ReturnFrom(int fn, ebbrt::Messenger::NetworkId frontEndNid);
 
     // Debugging functions
@@ -177,12 +198,14 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     inline void PrintVectorSums(vector<irtkRealImage> images, string name);
     
     inline void PrintVector(vector<double> vec, string name);
+
     inline void PrintVector(vector<int> vec, string name);
 
     inline void PrintAttributeVectorSums();
     
     // Serialize
     void DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp);
+
     void DeserializeTransformations(ebbrt::IOBuf::DataPointer& dp, irtkRigidTransformation& tmp);
 };
 

@@ -15,7 +15,8 @@
 
 using namespace ebbrt;
 
-class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public irtkObject {
+class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, 
+  public irtkObject {
 
   private:
     // Ebb creation parameters 
@@ -135,8 +136,10 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     ebbrt::Promise<int> _future;
     
-    int* _reconstructedIntPtr = NULL;
-    double* _reconstructedDoublePtr = NULL;
+    int* _imageIntPtr = NULL;
+    double* _imageDoublePtr = NULL;
+    // TODO: this case should be handled with the _imageDoublePtr
+    // remember to fix it and delete it
     double* _volumeWeightsDoublePtr = NULL;
 
     // EStep() variables
@@ -149,6 +152,10 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     double _mins;
     double _meanSCPU;
     double _meanS2CPU;
+
+    // SuperResolution() variables
+    irtkRealImage _confidenceMap;
+    irtkRealImage _addon;
 
   public:
 
@@ -177,7 +184,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void SetDefaultParameters();
 
-    void SetSmoothingParameters();
+    void SetSmoothingParameters(double lambda);
 
     irtkRealImage CreateMask(irtkRealImage image);
 
@@ -213,7 +220,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void CreateSlicesAndTransformations(vector<irtkRealImage>& stacks,
         vector<irtkRigidTransformation>& stack_transformations,
         vector<double>& thickness,
-        const vector<irtkRealImage> &probability_maps = vector<irtkRealImage>());
+        const vector<irtkRealImage> &probability_maps = vector<irtkRealImage>()
+        );
 
     void MaskSlices();
 
@@ -223,7 +231,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void InitializeEMValues();
 
-    struct reconstructionParameters CreateReconstructionParameters(int start, int end);
+    struct reconstructionParameters CreateReconstructionParameters(
+        int start, int end);
 
     void ReturnFrom();
 
@@ -267,7 +276,17 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void ReturnFromEStepII(ebbrt::IOBuf::DataPointer & dp);
 
     void ReturnFromEStepIII(ebbrt::IOBuf::DataPointer & dp);
-    
+
+    //Scale() function
+    void Scale();
+
+    void ReturnFromScale(ebbrt::IOBuf::DataPointer & dp);
+
+    //SuperResolution() function
+    void SuperResolution(int iteration);
+
+    void ReturnFromSuperResolution(ebbrt::IOBuf::DataPointer & dp);
+
     // Start program execution
     void Execute();
 

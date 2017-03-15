@@ -8,6 +8,8 @@
 #define E_STEP_I 4
 #define E_STEP_II 5
 #define E_STEP_III 6
+#define SCALE 7
+#define SUPERRESOLUTION 8
 
 #define ITERATION_DONE 14
 
@@ -56,13 +58,13 @@ struct eStepParameters {
 };
 
 struct eStepReturnParameters {
- double sum; 
- double den;
- double sum2;
- double den2; 
- double maxs; 
- double mins;
- double num;
+  double sum; 
+  double den;
+  double sum2;
+  double den2; 
+  double maxs; 
+  double mins;
+  double num;
 };
 
 #endif // PARAMETERS_H

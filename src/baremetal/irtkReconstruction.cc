@@ -187,10 +187,12 @@ void irtkReconstruction::DeserializeTransformations(ebbrt::IOBuf::DataPointer& d
 
   tmp = std::move(irt);
 }
-
-
 /* End of Deserialize functions */
 
+
+/*
+ * CoeffInit functions
+ */
 
 void printCoeffInitParameters(struct coeffInitParameters parameters) {
   cout << "CoeffInit() Parameters: " << endl;
@@ -254,7 +256,7 @@ struct coeffInitParameters irtkReconstruction::StoreCoeffInitParameters(
   int stackIndexSize = parameters.stackIndex;
   _delta = parameters.delta;
   _lambda = parameters.lambda;
-  _alpha = parameters.lambda;
+  //_alpha = parameters.alpha;
   _qualityFactor = parameters.qualityFactor;
 
   auto nSlices = dp.Get<int>();
@@ -431,12 +433,15 @@ void irtkReconstruction::ParallelCoeffInit() {
         }
     PSF /= sum;
 
-    //prepare storage for PSF transformed and resampled to the space of reconstructed volume
-    //maximum dim of rotated kernel - the next higher odd integer plus two to accound for rounding error of tx,ty,tz.
-    //Note conversion from PSF image coordinates to tPSF image coordinates *size/res
-    int dim = (floor(ceil(sqrt(double(xDim * xDim + yDim * yDim + zDim * zDim)) * size / res) / 2))
-      * 2 + 1 + 2;
-    //prepare image attributes. Voxel dimension will be taken from the reconstructed volume
+    //prepare storage for PSF transformed and resampled to the space of
+    //reconstructed volume maximum dim of rotated kernel - the next higher odd
+    //integer plus two to accound for rounding error of tx,ty,tz.  Note
+    //conversion from PSF image coordinates to tPSF image coordinates *size/res
+    
+    int dim = (floor(ceil(sqrt(double(xDim * xDim + yDim * yDim + zDim * zDim)) 
+            * size / res) / 2)) * 2 + 1 + 2;
+    //prepare image attributes. Voxel dimension will be taken from the
+    //reconstructed volume
     attr._x = dim;
     attr._y = dim;
     attr._z = dim;
@@ -479,7 +484,7 @@ void irtkReconstruction::ParallelCoeffInit() {
             for (jj = 0; jj < yDim; jj++)
               for (kk = 0; kk < zDim; kk++) {
                 //Calculate the position of the POINT3D of
-                //PSF centered over current slice voxel                            
+                //PSF centered over current slice voxel                       
                 //This is a bit complicated because slices
                 //can be oriented in any direction 
 
@@ -540,7 +545,8 @@ void irtkReconstruction::ParallelCoeffInit() {
                       if ((m >= 0) && (m < _reconstructed.GetY()))
                         for (n = nz; n <= nz + 1; n++)
                           if ((n >= 0) && (n < _reconstructed.GetZ())) {
-                            weight = (1 - fabs(l - x)) * (1 - fabs(m - y)) * (1 - fabs(n - z));
+                            weight = (1 - fabs(l - x)) * (1 - fabs(m - y)) 
+                              * (1 - fabs(n - z));
                             sum += weight;
                             if (_mask(l, m, n) == 1) {
                               inside = true;
@@ -557,10 +563,12 @@ void irtkReconstruction::ParallelCoeffInit() {
                       if ((m >= 0) && (m < _reconstructed.GetY()))
                         for (n = nz; n <= nz + 1; n++)
                           if ((n >= 0) && (n < _reconstructed.GetZ())) {
-                            weight = (1 - fabs(l - x)) * (1 - fabs(m - y)) * (1 - fabs(n - z));
+                            weight = (1 - fabs(l - x)) * (1 - fabs(m - y)) 
+                              * (1 - fabs(n - z));
 
                             //image coordinates in tPSF
-                            //(centre,centre,centre) in tPSF is aligned with (tx,ty,tz)
+                            //(centre,centre,centre) in tPSF is aligned with
+                            //(tx,ty,tz)
                             int aa, bb, cc;
                             aa = l - tx + centre;
                             bb = m - ty + centre;
@@ -570,9 +578,10 @@ void irtkReconstruction::ParallelCoeffInit() {
                             double value = PSF(ii, jj, kk) * weight / sum;
 
                             //Check that we are in tPSF
-                            if ((aa < 0) || (aa >= dim) || (bb < 0) || (bb >= dim) || (cc < 0)
-                                || (cc >= dim)) {
-                              cerr << "Error while trying to populate tPSF. " << aa << " " << bb
+                            if ((aa < 0) || (aa >= dim) || (bb < 0) 
+                                || (bb >= dim) || (cc < 0) || (cc >= dim)) {
+                              cerr << "Error while trying to populate tPSF. " 
+                                << aa << " " << bb
                                 << " " << cc << endl;
                               cerr << l << " " << m << " " << n << endl;
                               cerr << tx << " " << ty << " " << tz << endl;
@@ -618,7 +627,6 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
 
   int diff = _end - _start;
 
-  //TODO:
   //int factor = (int)ceil(diff / (float)_numThreads);
   int factor = (int)ceil(diff / (float)1);
 
@@ -626,41 +634,6 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
   int start = _start + (0 * factor);
   int end = _start + (0 * factor) + factor;
   end = (end > diff) ? _end : end;
-  /*
-
-     size_t nCPUs = ebbrt::Cpu::Count();
-     static ebbrt::SpinBarrier bar(nCPUs);
-     ebbrt::EventManager::EventContext context;
-     std::atomic<size_t> count(0);
-     size_t mainCPU = ebbrt::Cpu::GetMine();
-
-     cout << "nCPUs: " << nCPUs << endl;
-     for (size_t i = 0; i <  nCPUs; i++) {
-     cout << "indexToCPU(" << i << "): " << indexToCPU(i)
-     ebbrt::event_manager->SpawnRemote([nCPUs, &count, mainCPU, &context]{
-     size_t cpu = ebbrt::Cpu::GetMine();
-
-     cout << "CPU: " << cpu << endl;
-
-     {
-     std::lock_guard<ebbrt::SpinLock> l(spinlock);
-     }
-
-     count++;
-
-     bar.Wait();
-     while (count < (size_t)nCPUs)
-     ;
-
-
-     if (cpu == mainCPU) 
-     ebbrt::event_manager->ActivateContext(std::move(context));
-
-     }, indexToCPU(i));
-     }
-
-     ebbrt::event_manager->SaveContext(context);
-     */
   ParallelCoeffInit();
 
   _volumeWeights.Initialize(_reconstructed.GetImageAttributes());
@@ -695,7 +668,11 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
   }
   _averageVolumeWeight = sum / num;
 }
+/* End of CoeffInit functions */
 
+/*
+ * GaussianReconstruction functions
+ */
 void irtkReconstruction::GaussianReconstruction() {
   int inputIndex;
   int i, j, k, n;
@@ -744,6 +721,30 @@ void irtkReconstruction::GaussianReconstruction() {
   }
 }
 
+void irtkReconstruction::ReturnFromGaussianReconstruction(
+    Messenger::NetworkId frontEndNid) {
+  auto buf = MakeUniqueIOBuf(3 * sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+
+  dp.Get<int>() = GAUSSIAN_RECONSTRUCTION;
+  dp.Get<int>() = _start;
+  dp.Get<int>() = _end;
+
+  auto vnum = std::make_unique<StaticIOBuf>(
+      reinterpret_cast<const uint8_t *>(_voxelNum.data() + _start),
+      (size_t)((_end-_start) * sizeof(int)));
+
+  buf->PrependChain(std::move(vnum));
+  buf->PrependChain(std::move(serializeSlices(_reconstructed)));
+  buf->PrependChain(std::move(serializeSlices(_volumeWeights)));
+
+  SendMessage(frontEndNid, std::move(buf));
+}
+/* End of GaussianReconstruction functions */
+
+/*
+ * SimulateSlices functions
+ */
 void irtkReconstruction::ParallelSimulateSlices() {
 
   for (int inputIndex = _start; inputIndex < _end; ++inputIndex) {
@@ -813,6 +814,11 @@ void irtkReconstruction::SimulateSlices(ebbrt::IOBuf::DataPointer& dp) {
 
   ParallelSimulateSlices();
 }
+/* End of SimulateSlices functions */
+
+/*
+ * InitializeRobustStatistics functions
+ */
 
 void irtkReconstruction::InitializeRobustStatistics(double& sigma, int& num) {
   int i, j;
@@ -845,6 +851,22 @@ void irtkReconstruction::InitializeRobustStatistics(double& sigma, int& num) {
 
 }
 
+void irtkReconstruction::ReturnFromInitializeRobustStatistics(double& sigma, 
+    int& num, Messenger::NetworkId frontEndNid) {
+  auto buf = MakeUniqueIOBuf((2 * sizeof(int)) + (1 * sizeof(double)));
+  auto dp = buf->GetMutDataPointer();
+
+  dp.Get<int>() = INITIALIZE_ROBUST_STATISTICS;
+  dp.Get<int>() = num;
+  dp.Get<double>() = sigma;
+
+  SendMessage(frontEndNid, std::move(buf));
+}
+/* End of RobustStatistics functions */
+
+/*
+ * EStep functions
+ */
 double irtkReconstruction::M(double m) {
   return m*_step;
 }
@@ -853,13 +875,12 @@ double irtkReconstruction::G(double x, double s) {
   return _step*exp(-x*x / (2 * s)) / (sqrt(6.28*s));
 }
 
-// TODO: check and read parameters
-void irtkReconstruction::ParallelEStep(struct eStepReturnParameters& parameters) {
+void irtkReconstruction::ParallelEStep(
+    struct eStepReturnParameters& parameters) {
   for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
     irtkRealImage slice = _slices[inputIndex];
+    _weights[inputIndex] = 0;
     irtkRealImage &b = _bias[inputIndex];
-
-    // [fetalRecontruction] identify scale factor
     double scale = _scaleCPU[inputIndex];
 
     double num = 0;
@@ -883,10 +904,11 @@ void irtkReconstruction::ParallelEStep(struct eStepReturnParameters& parameters)
               _simulatedSlices[inputIndex](i, j, 0);
 
             // [fetalRecontruction] calculate norm and voxel-wise weights
-            // [fetalRecontruction] Gaussian distribution for inliers (likelihood)
-            double g =
-              G(slice(i, j, 0), _sigmaCPU);
-            // [fetalRecontruction] Uniform distribution for outliers (likelihood)
+            // [fetalRecontruction] Gaussian distribution for inliers
+            // (likelihood)
+            double g = G(slice(i, j, 0), _sigmaCPU);
+            // [fetalRecontruction] Uniform distribution for outliers
+            // (likelihood)
             double m = M(_mCPU);
 
             // [fetalRecontruction] voxel_wise posterior
@@ -894,8 +916,7 @@ void irtkReconstruction::ParallelEStep(struct eStepReturnParameters& parameters)
             _weights[inputIndex](i, j, 0) = weight;
             // [fetalRecontruction] calculate slice potentials
             if (_simulatedWeights[inputIndex](i, j, 0) > 0.99) {
-              _slicePotential[inputIndex] +=
-                (1.0 - weight) * (1.0 - weight);
+              _slicePotential[inputIndex] += (1.0 - weight) * (1.0 - weight);
               num++;
             }
           } else {
@@ -916,7 +937,7 @@ void irtkReconstruction::ParallelEStep(struct eStepReturnParameters& parameters)
     //TODO: Force excluded has to be received in the CoeffInit Step
     //To force-exclude slices predefined by a user, set their potentials to -1
     //for (unsigned int i = 0; i < _force_excluded.size(); i++)
-    //  slice_potential_cpu[_force_excluded[i]] = -1;
+    //  _slicePotential[_force_excluded[i]] = -1;
 
     for(int i = 0; i < _smallSlices.size(); i++) {
       _slicePotential[_smallSlices[i]] = -1;
@@ -928,11 +949,15 @@ void irtkReconstruction::ParallelEStep(struct eStepReturnParameters& parameters)
 
     if (_slicePotential[inputIndex] >= 0) {
       // calculate means
+      double s = _slicePotential[inputIndex] * _sliceWeightCPU[inputIndex];
       parameters.sum += _slicePotential[inputIndex] * 
         _sliceWeightCPU[inputIndex];
+      double d =  _sliceWeightCPU[inputIndex];
       parameters.den += _sliceWeightCPU[inputIndex];
+      double s2 = _slicePotential[inputIndex] * (1 - _sliceWeightCPU[inputIndex]);
       parameters.sum2 += _slicePotential[inputIndex] * 
         (1 - _sliceWeightCPU[inputIndex]);
+      double d2 = (1 - _sliceWeightCPU[inputIndex]);
       parameters.den2 += (1 - _sliceWeightCPU[inputIndex]);
 
       // calculate min and max of potentials in case means need to be initalized
@@ -940,7 +965,7 @@ void irtkReconstruction::ParallelEStep(struct eStepReturnParameters& parameters)
         parameters.maxs = _slicePotential[inputIndex];
       if (_slicePotential[inputIndex] < parameters.mins)
         parameters.mins = _slicePotential[inputIndex];
-    }
+    } 
   }
 
   cout << "---------------------------------------" << endl;
@@ -965,7 +990,8 @@ void irtkReconstruction::StoreEStepParameters(
   dp.Get(smallSlicesSize*sizeof(int), (uint8_t*) _smallSlices.data());
 }
 
-struct eStepReturnParameters irtkReconstruction::EStepI(ebbrt::IOBuf::DataPointer& dp) {
+struct eStepReturnParameters irtkReconstruction::EStepI(
+    ebbrt::IOBuf::DataPointer& dp) {
   StoreEStepParameters(dp);
   struct eStepReturnParameters parameters;
   parameters.sum = 0;
@@ -975,24 +1001,16 @@ struct eStepReturnParameters irtkReconstruction::EStepI(ebbrt::IOBuf::DataPointe
   parameters.maxs = 0;
   parameters.mins = 1;
   ParallelEStep(parameters);
-  cout << "---------------------------------------" << endl;
-  cout << "                 EStep I               " << endl;
-  cout << "sum: " << parameters.sum << endl;
-  cout << "den: " << parameters.den << endl;
-  cout << "sum2: " << parameters.sum2 << endl;
-  cout << "den2: " << parameters.den2 << endl;
-  cout << "maxs: " << parameters.maxs << endl;
-  cout << "mins: " << parameters.mins << endl;
-  cout << "---------------------------------------" << endl;
   return parameters;
 }
 
-struct eStepReturnParameters irtkReconstruction::EStepII(ebbrt::IOBuf::DataPointer& dp) {
+struct eStepReturnParameters irtkReconstruction::EStepII(
+    ebbrt::IOBuf::DataPointer& dp) {
 
   auto parameters = dp.Get<struct eStepParameters>();
   double meanSCPU = parameters.meanSCPU;
   double meanS2CPU = parameters.meanS2CPU;
-  
+
   struct eStepReturnParameters returnParameters;
   returnParameters.sum = 0;
   returnParameters.den = 0;
@@ -1014,19 +1032,12 @@ struct eStepReturnParameters irtkReconstruction::EStepII(ebbrt::IOBuf::DataPoint
       returnParameters.den2 += (1 - _sliceWeightCPU[inputIndex]);
     }
   }
-  
-  cout << "---------------------------------------" << endl;
-  cout << "                 EStep II             " << endl;
-  cout << "sum: " << returnParameters.sum << endl;
-  cout << "den: " << returnParameters.den << endl;
-  cout << "sum2: " << returnParameters.sum2 << endl;
-  cout << "den2: " << returnParameters.den2 << endl;
-  cout << "---------------------------------------" << endl;
- 
+
   return returnParameters;
 }
 
-struct eStepReturnParameters irtkReconstruction::EStepIII(ebbrt::IOBuf::DataPointer& dp) {
+struct eStepReturnParameters irtkReconstruction::EStepIII(
+    ebbrt::IOBuf::DataPointer& dp) {
   auto parameters = dp.Get<struct eStepParameters>();
   double sigmaSCPU = parameters.sigmaSCPU;
   double sigmaS2CPU = parameters.sigmaS2CPU;
@@ -1037,7 +1048,7 @@ struct eStepReturnParameters irtkReconstruction::EStepIII(ebbrt::IOBuf::DataPoin
   struct eStepReturnParameters returnParameters;
   returnParameters.sum = 0;
   returnParameters.num = 0;
-  
+
   double gs1, gs2;
 
   for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
@@ -1087,48 +1098,9 @@ struct eStepReturnParameters irtkReconstruction::EStepIII(ebbrt::IOBuf::DataPoin
   return returnParameters;
 }
 
-void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
-  auto buf = MakeUniqueIOBuf(sizeof(int));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = fn;
-  SendMessage(frontEndNid, std::move(buf));
-}
+void irtkReconstruction::ReturnFromEStepI(
+    struct eStepReturnParameters parameters, Messenger::NetworkId frontEndNid) {
 
-void irtkReconstruction::ReturnFromGaussianReconstruction(Messenger::NetworkId frontEndNid) {
-  auto buf = MakeUniqueIOBuf(3 * sizeof(int));
-  auto dp = buf->GetMutDataPointer();
-
-  dp.Get<int>() = GAUSSIAN_RECONSTRUCTION;
-  dp.Get<int>() = _start;
-  dp.Get<int>() = _end;
-
-  auto vnum = std::make_unique<StaticIOBuf>(
-      reinterpret_cast<const uint8_t *>(_voxelNum.data()),
-      (size_t)((_end-_start) * sizeof(int)));
-
-  PrintImageSums();
-
-  buf->PrependChain(std::move(vnum));
-  buf->PrependChain(std::move(serializeSlices(_reconstructed)));
-  buf->PrependChain(std::move(serializeSlices(_volumeWeights)));
-
-  SendMessage(frontEndNid, std::move(buf));
-}
-
-void irtkReconstruction::ReturnFromInitializeRobustStatistics(double& sigma, int& num, 
-    Messenger::NetworkId frontEndNid) {
-  auto buf = MakeUniqueIOBuf((2 * sizeof(int)) + (1 * sizeof(double)));
-  auto dp = buf->GetMutDataPointer();
-
-  dp.Get<int>() = INITIALIZE_ROBUST_STATISTICS;
-  dp.Get<int>() = num;
-  dp.Get<double>() = sigma;
-
-  SendMessage(frontEndNid, std::move(buf));
-}
-
-void irtkReconstruction::ReturnFromEStepI(struct eStepReturnParameters parameters, Messenger::NetworkId frontEndNid) {
-  
   auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(eStepReturnParameters));
   auto dp = buf->GetMutDataPointer();
   dp.Get<int>() = E_STEP_I;
@@ -1137,8 +1109,9 @@ void irtkReconstruction::ReturnFromEStepI(struct eStepReturnParameters parameter
   SendMessage(frontEndNid, std::move(buf));
 }
 
-void irtkReconstruction::ReturnFromEStepII(struct eStepReturnParameters parameters, Messenger::NetworkId frontEndNid) {
-  
+void irtkReconstruction::ReturnFromEStepII(
+    struct eStepReturnParameters parameters, Messenger::NetworkId frontEndNid) {
+
   auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(eStepReturnParameters));
   auto dp = buf->GetMutDataPointer();
   dp.Get<int>() = E_STEP_II;
@@ -1147,13 +1120,152 @@ void irtkReconstruction::ReturnFromEStepII(struct eStepReturnParameters paramete
   SendMessage(frontEndNid, std::move(buf));
 }
 
-void irtkReconstruction::ReturnFromEStepIII(struct eStepReturnParameters parameters, Messenger::NetworkId frontEndNid) {
-  
+void irtkReconstruction::ReturnFromEStepIII(
+    struct eStepReturnParameters parameters, Messenger::NetworkId frontEndNid) {
+
   auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(eStepReturnParameters));
   auto dp = buf->GetMutDataPointer();
   dp.Get<int>() = E_STEP_III;
   dp.Get<struct eStepReturnParameters>() = parameters;
+
+  SendMessage(frontEndNid, std::move(buf));
+}
+/* End of EStep functions */
+
+/* 
+ * Scale functions 
+ */
+void irtkReconstruction::ParallelScale() {
+  for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
+    // [fetalRecontruction] alias the current slice
+    irtkRealImage &slice = _slices[inputIndex];
+
+    // [fetalRecontruction] alias the current weight image
+    irtkRealImage &w = _weights[inputIndex];
+
+    // [fetalRecontruction] alias the current bias image
+    irtkRealImage &b = _bias[inputIndex];
+
+    // [fetalRecontruction] initialise calculation of scale
+    double scalenum = 0;
+    double scaleden = 0;
+
+    for (int i = 0; i < slice.GetX(); i++)
+      for (int j = 0; j < slice.GetY(); j++)
+        if (slice(i, j, 0) != -1) {
+          if (_simulatedWeights[inputIndex](i, j, 0) > 0.99) {
+            // [fetalRecontruction] scale - intensity matching
+            double eb = exp(-b(i, j, 0));
+            scalenum += w(i, j, 0) * slice(i, j, 0) * eb *
+                        _simulatedSlices[inputIndex](i, j, 0);
+            scaleden += w(i, j, 0) * slice(i, j, 0) * eb * slice(i, j, 0) * eb;
+          }
+        }
+
+    // [fetalRecontruction] calculate scale for this slice
+    if (scaleden > 0)
+      _scaleCPU[inputIndex] = scalenum / scaleden;
+    else
+      _scaleCPU[inputIndex] = 1;
+  }
+}
+
+void irtkReconstruction::Scale() {
+  ParallelScale();
+}
+
+void irtkReconstruction::ReturnFromScale( Messenger::NetworkId frontEndNid) {
+  ReturnFrom(SCALE, frontEndNid);
+}
+/* End of Scale functions */
+
+/*
+ * Superresolution functions
+ */
+
+void irtkReconstruction::ParallelSuperresolution() {
+  for (int inputIndex = _start; inputIndex < _end; ++inputIndex) {
+    // [fetalReconstruction] read the current slice
+    irtkRealImage slice = _slices[inputIndex];
+
+    // [fetalReconstruction] read the current weight image
+    irtkRealImage &w = _weights[inputIndex];
+
+    // [fetalReconstruction] read the current bias image
+    irtkRealImage &b = _bias[inputIndex];
+
+    // [fetalReconstruction] identify scale factor
+    double scale = _scaleCPU[inputIndex];
+      
+    // [fetalReconstruction] Update reconstructed volume using current slice
+    // [fetalReconstruction] Distribute error to the volume
+    POINT3D p;
+    for (int i = 0; i < slice.GetX(); i++) {
+      for (int j = 0; j < slice.GetY(); j++) {
+        if (slice(i, j, 0) != -1) {
+          // [fetalReconstruction] bias correct and scale the slice
+          slice(i, j, 0) *= exp(-b(i, j, 0)) * scale;
+
+          if (_simulatedSlices[inputIndex](i, j, 0) > 0)
+            slice(i, j, 0) -=
+              _simulatedSlices[inputIndex](i, j, 0);
+          else
+            slice(i, j, 0) = 0;
+
+          int n = _volcoeffs[inputIndex][i][j].size();
+          for (int k = 0; k < n; k++) {
+            p = _volcoeffs[inputIndex][i][j][k];
+            _addon(p.x, p.y, p.z) +=
+              p.value * slice(i, j, 0) * w(i, j, 0) *
+              _sliceWeightCPU[inputIndex];
+            _confidenceMap(p.x, p.y, p.z) +=
+              p.value * w(i, j, 0) *
+              _sliceWeightCPU[inputIndex];
+          }
+        }
+      }
+    }
+  }
+
+}
+
+void irtkReconstruction::SuperResolution(ebbrt::IOBuf::DataPointer& dp) {
+
+  int iter = dp.Get<int>();
   
+  if(iter == 1) {
+      _addon.Initialize(_reconstructed.GetImageAttributes());
+      _confidenceMap.Initialize(_reconstructed.GetImageAttributes());
+  } 
+  // Clear addon
+  _addon = 0;
+
+  // Clear confidence map
+  _confidenceMap = 0;
+  
+  ParallelSuperresolution();
+
+}
+
+void irtkReconstruction::ReturnFromSuperResolution(
+    Messenger::NetworkId frontEndNid) {
+  auto buf = MakeUniqueIOBuf(sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  
+  dp.Get<int>() = SUPERRESOLUTION;
+  
+  buf->PrependChain(std::move(serializeSlices(_addon)));
+  buf->PrependChain(std::move(serializeSlices(_confidenceMap)));
+
+  SendMessage(frontEndNid, std::move(buf));
+}
+
+/* End of Superresolution */
+
+void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
+  auto buf = MakeUniqueIOBuf(sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = fn;
   SendMessage(frontEndNid, std::move(buf));
 }
 
@@ -1202,12 +1314,6 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
           cout << "---------------------------------------" << endl;
         }
 
-        //TODO: this must be done in the FrontEnd
-        //ExcludeSlicesWithOverlap();
-
-        //for (int i = 0; i < (int) _transformations.size(); i++)
-        //  _transformations[i].PrintTransformation();
-
         break;
       }
     case SIMULATE_SLICES:
@@ -1215,26 +1321,18 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         if (_debug) {
           cout << "---------------------------------------" << endl;
           cout << "           SIMULATE SLICES             " << endl;
-          cout << "---------------------------------------" << endl;
         }
 
         SimulateSlices(dp);
         ReturnFrom(SIMULATE_SLICES, nid);
 
         if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "           SIMULATE SLICES             " << endl;
           PrintImageSums();
           PrintVectorSums(_simulatedSlices, "Simulated Slices");
           PrintVectorSums(_simulatedWeights, "Simulated Weights");
           PrintVectorSums(_simulatedInside, "Simulated Inside");
           cout << "---------------------------------------" << endl;
         }
-
-        /*
-           for (int i = 0; i < (int) _transformations.size(); i++)
-           _transformations[i].PrintTransformation();
-           */
 
         break;
       }
@@ -1243,7 +1341,6 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         if (_debug) {
           cout << "---------------------------------------" << endl;
           cout << "     INITIALIZE ROBUST STATISTICS      " << endl;
-          cout << "---------------------------------------" << endl;
         }
 
         double sigma;
@@ -1252,8 +1349,6 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         ReturnFromInitializeRobustStatistics(sigma, num, nid);
 
         if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "     INITIALIZE ROBUST STATISTICS      " << endl;
           cout << "sigma: " << sigma << endl;
           cout << "num: " << num << endl; 
           PrintVectorSums(_slices, "Slices");
@@ -1272,23 +1367,31 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         if (_debug) {
           cout << "---------------------------------------" << endl;
           cout << "               ESTEP I                 " << endl;
-          cout << "---------------------------------------" << endl;
         }
 
         auto parameters = EStepI(dp);
         ReturnFromEStepI(parameters, nid);
+        
+        if (_debug)
+          for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
+            cout << "_slice_weight_cpu[" << inputIndex << "]: " << _sliceWeightCPU[inputIndex] << endl; 
+          }
+          cout << "---------------------------------------" << endl;
         break;
       }
     case E_STEP_II:
       {
-        
+
         if (_debug) {
           cout << "---------------------------------------" << endl;
           cout << "               ESTEP II                " << endl;
-          cout << "---------------------------------------" << endl;
         }
         auto parameters = EStepII(dp);
         ReturnFromEStepII(parameters, nid);
+
+        if (_debug)
+          cout << "---------------------------------------" << endl;
+          
         break;
       }
     case E_STEP_III:
@@ -1296,11 +1399,47 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         if (_debug) {
           cout << "---------------------------------------" << endl;
           cout << "               ESTEP III               " << endl;
-          cout << "---------------------------------------" << endl;
         }
         auto parameters = EStepIII(dp);
         ReturnFromEStepIII(parameters, nid);
+
+        if (_debug)
+          cout << "---------------------------------------" << endl;
+
         break;
+      }
+    case SCALE:
+      {
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "                 SCALE                 " << endl;
+        }
+
+        Scale();
+        ReturnFromScale(nid);
+
+        if (_debug) {
+          PrintVector(_scaleCPU, "ScaleCPU");
+          PrintImageSums();
+          cout << "---------------------------------------" << endl;
+        }
+
+        break;
+      }
+    case SUPERRESOLUTION:
+      {
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "            SUPERRESOLUTION            " << endl;
+        }
+        SuperResolution(dp);
+        ReturnFromSuperResolution(nid);
+
+        if (_debug) {
+          cout << "Addon: " << SumImage(_addon) << endl;
+          cout << "ConfidenceMap: " << SumImage(_confidenceMap) << endl;
+          cout << "---------------------------------------" << endl;
+        }
 
         break;
       }

@@ -86,7 +86,6 @@ void irtkReconstruction::SetDefaultParameters() {
   _sigmaS2CPU = 0.025;
   _mixSCPU = 0.9;
   _mixCPU = 0.9;
-  _alpha = (0.05 / _lambda) * _delta * _delta;
 
   _templateCreated = false;
   _haveMask = false;
@@ -132,30 +131,31 @@ void irtkReconstruction::SetParameters(arguments args) {
   _forceExcluded = args.forceExcluded; // Not used
   _devicesToUse = args.devicesToUse; // Not used
 
-  _iterations = args.iterations;  // Not used
+  _iterations = args.iterations;  
   _levels = args.levels; // Not used
-  _recIterationsFirst = args.recIterationsFirst; // Not used
-  _recIterationsLast = args.recIterationsLast; // Not used
+  _recIterationsFirst = args.recIterationsFirst; 
+  _recIterationsLast = args.recIterationsLast; 
   _numThreads = args.numThreads; // Not used
-  _numBackendNodes = args.numBackendNodes; // Not used
+  _numBackendNodes = args.numBackendNodes; 
   _numFrontendCPUs = args.numFrontendCPUs; // Not used
 
   _numInputStacksTuner = args.numInputStacksTuner; // Not used
   _T1PackageSize = args.T1PackageSize; // Not used
   _numDevicesToUse = args.numDevicesToUse; // Not used
 
-  _sigma = args.sigma; // Not used
+  _sigma = args.sigma; 
   _resolution = args.resolution; // Not used
   _averageValue = args.averageValue; // Not used
-  _delta = args.delta; // Not used
-  _lambda = args.lambda; // Not used
+  _delta = args.delta; 
+  _lambda = args.lambda; 
+  _alpha = (0.05 / _lambda) * _delta * _delta;
   _lastIterLambda = args.lastIterLambda; // Not used
   _smoothMask = args.smoothMask; // Not used
   _lowIntensityCutoff = (args.lowIntensityCutoff > 1) ? 1 : 0; // Not used
 
-  _globalBiasCorrection = args.globalBiasCorrection; // Not used
-  _intensityMatching = args.intensityMatching; // Not used
-  _debug = args.debug; // Not used
+  _globalBiasCorrection = args.globalBiasCorrection; 
+  _intensityMatching = args.intensityMatching; 
+  _debug = args.debug; 
   _noLog = args.noLog; // Not used
   _useCPU = args.useCPU; // Not used
   _useCPUReg = _useCPU; // Not used
@@ -219,7 +219,8 @@ std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeImageI2W(irtkRealImage& ri) {
 
   auto buf2 = std::make_unique<StaticIOBuf>(
       reinterpret_cast<const uint8_t *>(ri.GetWorldToImageMatrix().GetMatrix()),
-      (size_t)(ri.GetWorldToImageMatrix().Rows() * ri.GetWorldToImageMatrix().Cols() * sizeof(double)));
+      (size_t)(ri.GetWorldToImageMatrix().Rows() * 
+        ri.GetWorldToImageMatrix().Cols() * sizeof(double)));
   buf->PrependChain(std::move(buf2));
 
   return buf;
@@ -233,7 +234,8 @@ std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeImageW2I(irtkRealImage& ri) {
 
   auto buf2 = std::make_unique<StaticIOBuf>(
       reinterpret_cast<const uint8_t *>(ri.GetWorldToImageMatrix().GetMatrix()),
-      (size_t)(ri.GetWorldToImageMatrix().Rows() * ri.GetWorldToImageMatrix().Cols() * sizeof(double)));
+      (size_t)(ri.GetWorldToImageMatrix().Rows() * 
+        ri.GetWorldToImageMatrix().Cols() * sizeof(double)));
   buf->PrependChain(std::move(buf2));
 
   return buf;
@@ -253,7 +255,8 @@ std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeSlices(irtkRealImage& ri) {
   return buf;
 }
 
-std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeRigidTransMat(irtkRigidTransformation& rt) {
+std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeRigidTransMat(
+    irtkRigidTransformation& rt) {
   auto buf = MakeUniqueIOBuf(2 * sizeof(int));
   auto dp = buf->GetMutDataPointer();
   dp.Get<int>() = rt._matrix.Rows();
@@ -268,7 +271,8 @@ std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeRigidTransMat(irtkRigidTransform
   return buf;
 }
 
-std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeRigidTrans(irtkRigidTransformation& rt) {
+std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeRigidTrans(
+    irtkRigidTransformation& rt) {
   auto buf = MakeUniqueIOBuf((12 * sizeof(double)) + (8 * sizeof(int)));
   auto dp = buf->GetMutDataPointer();
 
@@ -334,8 +338,8 @@ std::unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeMask()
   return buf;
 }
 
-std::unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeReconstructed()
-{
+std::unique_ptr<ebbrt::MutUniqueIOBuf> 
+irtkReconstruction::SerializeReconstructed() {
   auto buf = MakeUniqueIOBuf(0);
   buf->PrependChain(std::move(serializeImageAttr(_reconstructed)));
   buf->PrependChain(std::move(serializeImageI2W(_reconstructed)));
@@ -344,14 +348,13 @@ std::unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeReconstructe
   return buf;
 }
 
-std::unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeTransformations()
-{
+std::unique_ptr<ebbrt::MutUniqueIOBuf> 
+irtkReconstruction::SerializeTransformations() {
   auto buf = MakeUniqueIOBuf(1 * sizeof(int));
   auto dp = buf->GetMutDataPointer();
   dp.Get<int>() = _transformations.size();
 
-  for(int j = 0; j < _transformations.size(); j++)
-  {
+  for(int j = 0; j < _transformations.size(); j++) {
     buf->PrependChain(std::move(serializeRigidTrans(_transformations[j])));
   }
 
@@ -389,21 +392,21 @@ void irtkReconstruction::AssembleImage(ebbrt::IOBuf::DataPointer & dp) {
   int start = dp.Get<int>();
   int end = dp.Get<int>();
 
-  _reconstructedIntPtr = (int *) malloc((end - start)*sizeof(int));
+  _imageIntPtr = (int *) malloc((end - start)*sizeof(int));
 
-  dp.Get((end-start) * sizeof(int), (uint8_t*) _reconstructedIntPtr);
+  dp.Get((end-start) * sizeof(int), (uint8_t*) _imageIntPtr);
 
-  memcpy(_voxelNum.data() + start, _reconstructedIntPtr, 
+  memcpy(_voxelNum.data() + start, _imageIntPtr, 
       (end-start) * sizeof(int));
   
   int size = dp.Get<int>();
 
-  _reconstructedDoublePtr = (double*) malloc (
+  _imageDoublePtr = (double*) malloc (
       _reconstructed.GetSizeMat()*sizeof(double));
 
-  dp.Get(size*sizeof(double), (uint8_t*) _reconstructedDoublePtr);
+  dp.Get(size*sizeof(double), (uint8_t*) _imageDoublePtr);
 
-  _reconstructed.SumVec(_reconstructedDoublePtr);
+  _reconstructed.SumVec(_imageDoublePtr);
 
   size = dp.Get<int>();
 
@@ -471,6 +474,25 @@ void irtkReconstruction::ReturnFromEStepIII(ebbrt::IOBuf::DataPointer & dp) {
 
   _sum += parameters.sum;
   _num += parameters.num;
+
+  ReturnFrom();
+}
+
+void irtkReconstruction::ReturnFromScale(ebbrt::IOBuf::DataPointer & dp) {
+  ReturnFrom();
+}
+
+void irtkReconstruction::ReturnFromSuperResolution(
+    ebbrt::IOBuf::DataPointer & dp) {
+  // Read addon image
+  int addonSize = dp.Get<int>();
+  dp.Get(addonSize*sizeof(double), (uint8_t*) _imageDoublePtr);
+  _addon.SumVec(_imageDoublePtr);
+
+  // Read confidenceMap image
+  int confidenceMapSize = dp.Get<int>();
+  dp.Get(addonSize*sizeof(double), (uint8_t*) _imageDoublePtr);
+  _confidenceMap.SumVec(_imageDoublePtr);
 
   ReturnFrom();
 }
@@ -624,7 +646,8 @@ double irtkReconstruction::CreateTemplate(irtkRealImage stack,
   // [fetalRecontruction] Get image attributes - image size and voxel size
   irtkImageAttributes attr = stack.GetImageAttributes();
 
-  // [fetalRecontruction] enlarge stack in z-direction in case top of the head is cut off
+  // [fetalRecontruction] enlarge stack in z-direction in case top of the head 
+  // is cut off
   attr._z += 2;
 
   // [fetalRecontruction] create enlarged image
@@ -696,8 +719,8 @@ void irtkReconstruction::SetMask(irtkRealImage *mask, double sigma,
       }
     }
 
-    // [fetalRecontruction] resample the mask according to the template volume using identity
-    // [fetalRecontruction] transformation
+    // [fetalRecontruction] resample the mask according to the template volume 
+    // using identity transformation
     irtkRigidTransformation transformation;
     irtkImageTransformation imagetransformation;
     irtkNearestNeighborInterpolateImageFunction interpolator;
@@ -705,8 +728,8 @@ void irtkReconstruction::SetMask(irtkRealImage *mask, double sigma,
     imagetransformation.SetOutput(&_mask);
     // [fetalRecontruction] target is zero image, need padding -1
     imagetransformation.PutTargetPaddingValue(-1);
-    // [fetalRecontruction] need to fill voxels in target where there is no info from source with
-    // [fetalRecontruction] zeroes
+    // [fetalRecontruction] need to fill voxels in target where there is no 
+    // info from source with zeroes
     imagetransformation.PutSourcePaddingValue(0);
     imagetransformation.PutInterpolator(&interpolator);
     imagetransformation.Run();
@@ -1045,7 +1068,8 @@ void irtkReconstruction::MaskSlices() {
     irtkRealImage &slice = _slices[inputIndex];
     for (i = 0; i < slice.GetX(); i++)
       for (j = 0; j < slice.GetY(); j++) {
-        // [fetalRecontruction] if the value is smaller than 1 assume it is padding
+        // [fetalRecontruction] if the value is smaller than 1 assume it is 
+        // padding
         if (slice(i, j, 0) < 0.01)
           slice(i, j, 0) = -1;
         // [fetalRecontruction] image coordinates of a slice voxel
@@ -1142,6 +1166,7 @@ void irtkReconstruction::InitializeEM() {
 }
 
 void irtkReconstruction::Execute() {
+  int recIterations = _recIterationsFirst;
   for (int it = 0; it < _iterations; it++) {
     if (_debug)
       cout << "Iteration " << it << endl;
@@ -1157,7 +1182,7 @@ void irtkReconstruction::Execute() {
     auto lastIteration = it == (_iterations - 1);
 
     if (lastIteration) {
-      SetSmoothingParameters();
+      SetSmoothingParameters(_lastIterLambda);
     } else {
       // TODO: fix for iterations greater than 1. For now just testing one
       // iteration.
@@ -1178,6 +1203,37 @@ void irtkReconstruction::Execute() {
     InitializeRobustStatistics();
 
     EStep();
+    
+    // Set number of reconstruction iterations
+    if (lastIteration) {
+      recIterations = _recIterationsLast;
+    } else {
+      recIterations = _recIterationsFirst;
+    }
+
+    for (int i = 0; i < recIterations; i++) {
+
+      cout << "---------------------------------------" << endl;
+      cout << "            Bias Correction            " << endl;
+      cout << "_intensityMatching: " << _intensityMatching << endl;
+      cout << "_disableBiasCorr: " << _disableBiasCorr << endl;
+      cout << "_sigma: " << _sigma << endl;
+      cout << "---------------------------------------" << endl;
+      if (_intensityMatching) {
+        // calculate bias fields
+        if (!_disableBiasCorr) {
+          //TODO: implement Bias() function
+          //TODO: figure out what happens with sigma. In the original
+          // the value at this point is 12, but here is 20.
+          //if (_sigma > 0) 
+            //Bias();
+        }
+        // calculate scales
+        Scale();
+      }
+
+      SuperResolution(it + 1);
+    }
   }
 }
 
@@ -1237,7 +1293,8 @@ void irtkReconstruction::CoeffInit(int iteration) {
       end = (end > diff) ? diff : end;
 
       auto parameters = createCoeffInitParameters();
-      auto reconstructionParameters = CreateReconstructionParameters(start, end);
+      auto reconstructionParameters = 
+        CreateReconstructionParameters(start, end);
       cout << "Start: " << start << " End: " << end << endl;
 
       auto buf = MakeUniqueIOBuf(sizeof(int) + 
@@ -1293,8 +1350,9 @@ void irtkReconstruction::CoeffInit(int iteration) {
 
 void irtkReconstruction::ExcludeSlicesWithOverlap() {
   vector<int> voxelNumTmp;
-  for (int i = 0; i < (int) _voxelNum.size(); i++)
+  for (int i = 0; i < (int) _voxelNum.size(); i++) {
     voxelNumTmp.push_back(_voxelNum[i]);
+  }
 
   //find median
   sort(voxelNumTmp.begin(), voxelNumTmp.end());
@@ -1412,6 +1470,7 @@ void irtkReconstruction::InitializeRobustStatistics() {
 }
 
 void irtkReconstruction::EStepI() {
+
   struct eStepParameters parameters;
 
   parameters.mCPU = _mCPU;
@@ -1609,6 +1668,78 @@ void irtkReconstruction::EStep() {
   EStepIII();
 }
 
+void irtkReconstruction::Scale() {
+  for (int i = 0; i < (int) _nids.size(); i++) {
+    auto buf = MakeUniqueIOBuf(sizeof(int) + 
+        sizeof(struct eStepParameters));
+    auto dp = buf->GetMutDataPointer();
+
+    dp.Get<int>() = SCALE;
+	
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
+
+  _future = ebbrt::Promise<int>();
+  auto f = _future.GetFuture();
+  if (_debug)
+    cout << "Scale(): Blocking" << endl;
+
+  f.Block();
+  if (_debug) {
+    cout << "Scale(): Returned from future" << endl;
+  }
+}
+
+void irtkReconstruction::SuperResolution(int iteration) {
+
+  cout << "------------ Superresolution parameters -----------" << endl;
+  cout << "iter: " << iteration << endl;
+  cout << "alpha: " << _alpha << endl;
+  cout << "global_bias_correction: " << _globalBiasCorrection << endl;
+  cout << "min_intensity: " << _minIntensity << endl;
+  cout << "max_intensity: " << _maxIntensity << endl;
+  cout << "---------------------------------------------------" << endl;
+
+  if (iteration == 1) {
+    _addon.Initialize(_reconstructed.GetImageAttributes());
+    _confidenceMap.Initialize(_reconstructed.GetImageAttributes());
+  }
+  
+  _addon = 0;
+  _confidenceMap = 0;
+
+  for (int i = 0; i < (int) _nids.size(); i++) {
+    auto buf = MakeUniqueIOBuf(sizeof(int) + 
+        sizeof(struct eStepParameters));
+    auto dp = buf->GetMutDataPointer();
+
+    dp.Get<int>() = SUPERRESOLUTION;
+    dp.Get<int>() = iteration;
+	
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
+
+  _future = ebbrt::Promise<int>();
+  auto f = _future.GetFuture();
+  if (_debug)
+    cout << "SuperResolution(): Blocking" << endl;
+
+  f.Block();
+  if (_debug) {
+    cout << "SuperResolution(): Returned from future" << endl;
+  }
+
+  if (_debug) {
+    cout << "---------------------------------------" << endl;
+    cout << "            SUPERRESOLUTION            " << endl;
+    cout << "_addon: " << SumImage(_addon) << endl;
+    cout << "_confidenceMap: " << SumImage(_confidenceMap) << endl;
+    cout << "---------------------------------------" << endl;
+  }
+}
+
 void irtkReconstruction::InitializeEMValues() {
   for (int i = 0; i < _slices.size(); i++) {
     // [fetalRecontruction] Initialize voxel weights and bias values
@@ -1647,9 +1778,9 @@ void irtkReconstruction::ResetOrigin(
   transformation.PutRotationZ(0);
 }
 
-void irtkReconstruction::SetSmoothingParameters() {
-  _lambda = _lambda * _delta * _delta;
-  _alpha = 0.05 / _lambda;
+void irtkReconstruction::SetSmoothingParameters(double lambda) {
+  _lambda = lambda * _delta * _delta;
+  _alpha = 0.05 / lambda;
   _alpha = (_alpha > 1) ? 1 : _alpha;
 }
 
@@ -1696,6 +1827,16 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
     case E_STEP_III:
       {
         ReturnFromEStepIII(dp);
+        break;
+      }
+    case SCALE:
+      {
+        ReturnFromScale(dp);
+        break;
+      }
+    case SUPERRESOLUTION:
+      {
+        ReturnFromSuperResolution(dp);
         break;
       }
     default:
