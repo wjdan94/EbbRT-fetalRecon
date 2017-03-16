@@ -1691,10 +1691,182 @@ void irtkReconstruction::Scale() {
   }
 }
 
+void irtkReconstruction::AdaptiveRegularization2(vector<irtkRealImage> &_b,
+    vector<double> &_factor, irtkRealImage &_original) {
+
+  int dx = _reconstructed.GetX();
+  int dy = _reconstructed.GetY();
+  int dz = _reconstructed.GetZ();
+  for (size_t x = 0; x != (size_t)_reconstructed.GetX(); ++x) {
+    int xx, yy, zz;
+    for (int y = 0; y < dy; y++)
+      for (int z = 0; z < dz; z++) {
+        double val = 0;
+        double valW = 0;
+        double sum = 0;
+        for (int i = 0; i < 13; i++) {
+          xx = x + _directions[i][0];
+          yy = y + _directions[i][1];
+          zz = z + _directions[i][2];
+          if ((xx >= 0) && (xx < dx) && (yy >= 0) && (yy < dy) && (zz >= 0) &&
+              (zz < dz)) {
+            val += _b[i](x, y, z) * _original(xx, yy, zz) *
+              _confidenceMap(xx, yy, zz);
+            valW += _b[i](x, y, z) * _confidenceMap(xx, yy, zz);
+            sum += _b[i](x, y, z);
+          }
+        }
+
+        for (int i = 0; i < 13; i++) {
+          xx = x - _directions[i][0];
+          yy = y - _directions[i][1];
+          zz = z - _directions[i][2];
+          if ((xx >= 0) && (xx < dx) && (yy >= 0) && (yy < dy) && (zz >= 0) &&
+              (zz < dz)) {
+            val += _b[i](xx, yy, zz) * _original(xx, yy, zz) *
+              _confidenceMap(xx, yy, zz);
+            valW += _b[i](xx, yy, zz) * _confidenceMap(xx, yy, zz);
+            sum += _b[i](xx, yy, zz);
+          }
+        }
+
+        val -= sum * _original(x, y, z) * _confidenceMap(x, y, z);
+        valW -= sum * _confidenceMap(x, y, z);
+        val = _original(x, y, z) * _confidenceMap(x, y, z) +
+          _alpha * _lambda / (_delta * _delta) * val;
+        valW = _confidenceMap(x, y, z) +
+          _alpha * _lambda / (_delta * _delta) * valW;
+
+        if (valW > 0) {
+          _reconstructed(x, y, z) = val / valW;
+        } else
+          _reconstructed(x, y, z) = 0;
+      }
+  }
+}
+
+void irtkReconstruction::AdaptiveRegularization1(vector<irtkRealImage> &_b,
+    vector<double> &_factor, irtkRealImage &_original) {
+  int dx = _reconstructed.GetX();
+  int dy = _reconstructed.GetY();
+  int dz = _reconstructed.GetZ();
+  for (size_t i = 0; i != 13; ++i) {
+    int x, y, z, xx, yy, zz;
+    double diff;
+    for (x = 0; x < dx; x++)
+      for (y = 0; y < dy; y++)
+        for (z = 0; z < dz; z++) {
+          xx = x + _directions[i][0];
+          yy = y + _directions[i][1];
+          zz = z + _directions[i][2];
+          if ((xx >= 0) && (xx < dx) && (yy >= 0) && (yy < dy) && (zz >= 0) &&
+              (zz < dz) && (_confidenceMap(x, y, z) > 0) &&
+              (_confidenceMap(xx, yy, zz) > 0)) {
+            diff = (_original(xx, yy, zz) - _original(x, y, z)) *
+              sqrt(_factor[i]) / _delta;
+            _b[i](x, y, z) = _factor[i] / sqrt(1 + diff * diff);
+
+          } else
+            _b[i](x, y, z) = 0;
+        }
+  }
+}
+
+void irtkReconstruction::AdaptiveRegularization(int iteration,
+    irtkRealImage &original) {
+
+  vector<double> factor(13, 0);
+  for (int i = 0; i < 13; i++) {
+    for (int j = 0; j < 3; j++)
+      factor[i] += fabs(double(_directions[i][j]));
+    factor[i] = 1 / factor[i];
+  }
+
+  vector<irtkRealImage> b; 
+  for (int i = 0; i < 13; i++)
+    b.push_back(_reconstructed);
+
+  AdaptiveRegularization1(b, factor, original);
+
+  irtkRealImage original2 = _reconstructed;
+  AdaptiveRegularization2(b, factor, original2);
+
+  if (_alpha * _lambda / (_delta * _delta) > 0.068) {
+    cout << "Warning: regularization might not have smoothing effect! Ensure "
+         << "that alpha*lambda/delta^2 is below 0.068." 
+         << endl;
+  }
+}
+
+void irtkReconstruction::BiasCorrectVolume(irtkRealImage &original) {
+  // [fetalReconstruction] remove low-frequancy component in the 
+  // [fetalReconstruction] reconstructed image which might have accured 
+  // [fetalReconstruction] due to overfitting of the biasfield
+  irtkRealImage residual = _reconstructed;
+  irtkRealImage weights = _mask;
+
+  // [fetalReconstruction] calculate weighted residual
+  irtkRealPixel *pr = residual.GetPointerToVoxels();
+  irtkRealPixel *po = original.GetPointerToVoxels();
+  irtkRealPixel *pw = weights.GetPointerToVoxels();
+  for (int i = 0; i < _reconstructed.GetNumberOfVoxels(); i++) {
+    // [fetalReconstruction] second and term to avoid numerical problems
+    if ((*pw == 1) && (*po > _lowIntensityCutoff * _maxIntensity) &&
+        (*pr > _lowIntensityCutoff * _maxIntensity)) {
+      *pr /= *po;
+      *pr = log(*pr);
+    } else {
+      *pw = 0;
+      *pr = 0;
+    }
+    pr++;
+    po++;
+    pw++;
+  }
+  // [fetalReconstruction] blurring needs to be same as for slices
+  irtkGaussianBlurring<irtkRealPixel> gb(_sigmaBias);
+  // [fetalReconstruction] blur weigted residual
+  gb.SetInput(&residual);
+  gb.SetOutput(&residual);
+  gb.Run();
+  // [fetalReconstruction] blur weight image
+  gb.SetInput(&weights);
+  gb.SetOutput(&weights);
+  gb.Run();
+
+  // [fetalReconstruction] calculate the bias field
+  pr = residual.GetPointerToVoxels();
+  pw = weights.GetPointerToVoxels();
+  irtkRealPixel *pm = _mask.GetPointerToVoxels();
+  irtkRealPixel *pi = _reconstructed.GetPointerToVoxels();
+  for (int i = 0; i < _reconstructed.GetNumberOfVoxels(); i++) {
+
+    if (*pm == 1) {
+      // [fetalReconstruction] weighted gaussian smoothing
+      *pr /= *pw;
+      // [fetalReconstruction] exponential to recover multiplicative bias field
+      *pr = exp(*pr);
+      // [fetalReconstruction] bias correct reconstructed
+      *pi /= *pr;
+      // [fetalReconstruction] clamp intensities to allowed range
+      if (*pi < _minIntensity * 0.9)
+        *pi = _minIntensity * 0.9;
+      if (*pi > _maxIntensity * 1.1)
+        *pi = _maxIntensity * 1.1;
+    } else {
+      *pr = 0;
+    }
+    pr++;
+    pw++;
+    pm++;
+    pi++;
+  }
+}
+
 void irtkReconstruction::SuperResolution(int iteration) {
 
   cout << "------------ Superresolution parameters -----------" << endl;
-  cout << "iter: " << iteration << endl;
+  cout << "iteration: " << iteration << endl;
   cout << "alpha: " << _alpha << endl;
   cout << "global_bias_correction: " << _globalBiasCorrection << endl;
   cout << "min_intensity: " << _minIntensity << endl;
@@ -1708,6 +1880,7 @@ void irtkReconstruction::SuperResolution(int iteration) {
   
   _addon = 0;
   _confidenceMap = 0;
+  irtkRealImage original = _reconstructed;
 
   for (int i = 0; i < (int) _nids.size(); i++) {
     auto buf = MakeUniqueIOBuf(sizeof(int) + 
@@ -1731,9 +1904,51 @@ void irtkReconstruction::SuperResolution(int iteration) {
     cout << "SuperResolution(): Returned from future" << endl;
   }
 
+  if (!_adaptive)
+    for (int i = 0; i < _addon.GetX(); i++) {
+      for (int j = 0; j < _addon.GetY(); j++) {
+        for (int k = 0; k < _addon.GetZ(); k++) {
+          if (_confidenceMap(i, j, k) > 0) {
+            // [fetalReconstruction] ISSUES if _confidenceMap(i, j, k) is too 
+            // [fetalReconstruction] small leading to bright pixels
+            _addon(i, j, k) /= _confidenceMap(i, j, k);
+            // [fetalReconstruction] this is to revert to normal (non-adaptive) 
+            // [fetalReconstruction] regularisation
+            _confidenceMap(i, j, k) = 1;
+          }
+        }
+      }
+    }
+
+  _reconstructed += _addon * _alpha; 
+
+  // [fetalReconstruction] bound the intensities
+  for (int i = 0; i < (int)_reconstructed.GetX(); i++) {
+    for (int j = 0; j < (int)_reconstructed.GetY(); j++) {
+      for (int k = 0; k < (int)_reconstructed.GetZ(); k++) {
+        if (_reconstructed(i, j, k) < _minIntensity * 0.9)
+          _reconstructed(i, j, k) = _minIntensity * 0.9;
+        if (_reconstructed(i, j, k) > _maxIntensity * 1.1)
+          _reconstructed(i, j, k) = _maxIntensity * 1.1;
+      }
+    }
+  }
+
+  // [fetalReconstruction] Smooth the reconstructed image
+  // TODO: This can be parallelized.
+  AdaptiveRegularization(iteration, original);
+
+  // [fetalReconstruction] Remove the bias in the reconstructed volume 
+  // [fetalReconstruction] compared to previous iteration
+  // TODO: verify that this works.
+  if (_globalBiasCorrection) {
+    BiasCorrectVolume(original);
+  }
+
   if (_debug) {
     cout << "---------------------------------------" << endl;
     cout << "            SUPERRESOLUTION            " << endl;
+    PrintImageSums();
     cout << "_addon: " << SumImage(_addon) << endl;
     cout << "_confidenceMap: " << SumImage(_confidenceMap) << endl;
     cout << "---------------------------------------" << endl;

@@ -93,8 +93,8 @@ std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeSlices(irtkRealImage& ri) {
   return buf;
 }
 
-void irtkReconstruction::DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp)
-{
+void irtkReconstruction::DeserializeSlice(
+    ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp) {
   auto x = dp.Get<int>();
   auto y = dp.Get<int>();
   auto z = dp.Get<int>();
@@ -152,8 +152,8 @@ void irtkReconstruction::DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRea
   tmp = std::move(ri);
 }
 
-void irtkReconstruction::DeserializeTransformations(ebbrt::IOBuf::DataPointer& dp, irtkRigidTransformation& tmp)
-{
+void irtkReconstruction::DeserializeTransformations(
+    ebbrt::IOBuf::DataPointer& dp, irtkRigidTransformation& tmp) {
   auto tx = dp.Get<double>();
   auto ty = dp.Get<double>();
   auto tz = dp.Get<double>();
@@ -183,7 +183,8 @@ void irtkReconstruction::DeserializeTransformations(ebbrt::IOBuf::DataPointer& d
   dp.Get(rows * cols * sizeof(double), (uint8_t*)ptr.get());
   irtkMatrix mat(rows, cols, std::move(ptr));
 
-  irtkRigidTransformation irt(tx, ty, tz, rx, ry, rz, cosrx, cosry, cosrz, sinx, siny, sinz, status0, status1, status2, status3, status4, status5, mat);
+  irtkRigidTransformation irt(tx, ty, tz, rx, ry, rz, cosrx, cosry,cosrz, sinx,
+      siny, sinz, status0, status1, status2, status3, status4, status5, mat);
 
   tmp = std::move(irt);
 }
@@ -348,10 +349,6 @@ void irtkReconstruction::InitializeEM() {
 }
 
 void irtkReconstruction::ParallelCoeffInit() {
-  if (_debug) {
-    cout << "[ParallelCoeffInit] "  << "start: " << _start << " end: " << _end <<  endl;
-  }
-
   for (size_t index = _start; (int) index != _end; ++index) {
 
     bool sliceInside;
@@ -368,7 +365,8 @@ void irtkReconstruction::ParallelCoeffInit() {
     //prepare structures for storage
     POINT3D p;
     VOXELCOEFFS empty;
-    SLICECOEFFS slicecoeffs(slice.GetX(), vector < VOXELCOEFFS >(slice.GetY(), empty));
+    SLICECOEFFS slicecoeffs(slice.GetX(),
+        vector < VOXELCOEFFS >(slice.GetY(), empty));
 
     //to check whether the slice has an overlap with mask ROI
     sliceInside = false;
@@ -379,13 +377,15 @@ void irtkReconstruction::ParallelCoeffInit() {
     double dx, dy, dz;
     slice.GetPixelSize(&dx, &dy, &dz);
 
-    //sigma of 3D Gaussian (sinc with FWHM=dx or dy in-plane, Gaussian with FWHM = dz through-plane)
+    //sigma of 3D Gaussian (sinc with FWHM=dx or dy in-plane, 
+    //Gaussian with FWHM = dz through-plane)
     double sigmax = 1.2 * dx / 2.3548;
     double sigmay = 1.2 * dy / 2.3548;
     double sigmaz = dz / 2.3548;
 
     //calculate discretized PSF
-    //isotropic voxel size of PSF - derived from resolution of reconstructed volume
+    //isotropic voxel size of PSF - derived from resolution of 
+    //reconstructed volume
     double size = res / _qualityFactor;
 
     //number of voxels in each direction
@@ -949,15 +949,11 @@ void irtkReconstruction::ParallelEStep(
 
     if (_slicePotential[inputIndex] >= 0) {
       // calculate means
-      double s = _slicePotential[inputIndex] * _sliceWeightCPU[inputIndex];
       parameters.sum += _slicePotential[inputIndex] * 
         _sliceWeightCPU[inputIndex];
-      double d =  _sliceWeightCPU[inputIndex];
       parameters.den += _sliceWeightCPU[inputIndex];
-      double s2 = _slicePotential[inputIndex] * (1 - _sliceWeightCPU[inputIndex]);
       parameters.sum2 += _slicePotential[inputIndex] * 
         (1 - _sliceWeightCPU[inputIndex]);
-      double d2 = (1 - _sliceWeightCPU[inputIndex]);
       parameters.den2 += (1 - _sliceWeightCPU[inputIndex]);
 
       // calculate min and max of potentials in case means need to be initalized
@@ -967,16 +963,6 @@ void irtkReconstruction::ParallelEStep(
         parameters.mins = _slicePotential[inputIndex];
     } 
   }
-
-  cout << "---------------------------------------" << endl;
-  cout << "             ParallelEStep             " << endl;
-  cout << "sum: " << parameters.sum << endl;
-  cout << "den: " << parameters.den << endl;
-  cout << "sum2: " << parameters.sum2 << endl;
-  cout << "den2: " << parameters.den2 << endl;
-  cout << "maxs: " << parameters.maxs << endl;
-  cout << "mins: " << parameters.mins << endl;
-  cout << "---------------------------------------" << endl;
 }
 
 void irtkReconstruction::StoreEStepParameters(
@@ -1280,15 +1266,12 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         if (_debug) {
           cout << "---------------------------------------" << endl;
           cout << "               COEFFINIT               " << endl;
-          cout << "---------------------------------------" << endl;
         }
 
         CoeffInit(dp);
         ReturnFrom(COEFF_INIT,nid);
 
         if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "               COEFFINIT               " << endl;
           PrintImageSums();
           cout << "---------------------------------------" << endl;
         }
@@ -1300,17 +1283,15 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         if (_debug) {
           cout << "---------------------------------------" << endl;
           cout << "       GAUSSIAN RECONSTRUCTION         " << endl;
-          cout << "---------------------------------------" << endl;
         }
 
         GaussianReconstruction();
         ReturnFromGaussianReconstruction(nid);
 
         if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "       GAUSSIAN RECONSTRUCTION         " << endl;
           PrintImageSums();
-          cout << "_volumeWeights: " << SumImage(_volumeWeights) << endl;
+          cout << fixed << "_volumeWeights: " 
+            << SumImage(_volumeWeights) << endl;
           cout << "---------------------------------------" << endl;
         }
 
@@ -1328,9 +1309,6 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
 
         if (_debug) {
           PrintImageSums();
-          PrintVectorSums(_simulatedSlices, "Simulated Slices");
-          PrintVectorSums(_simulatedWeights, "Simulated Weights");
-          PrintVectorSums(_simulatedInside, "Simulated Inside");
           cout << "---------------------------------------" << endl;
         }
 
@@ -1351,12 +1329,6 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         if (_debug) {
           cout << "sigma: " << sigma << endl;
           cout << "num: " << num << endl; 
-          PrintVectorSums(_slices, "Slices");
-          PrintVectorSums(_simulatedWeights, "Simulated Weights");
-          PrintVectorSums(_simulatedInside, "Simulated Inside");
-
-          PrintVector(_sliceInsideCPU, "Slice Inside CPU");
-          PrintVector(_sliceWeightCPU, "Slice Weight CPU");
           cout << "---------------------------------------" << endl;
         }
 
@@ -1373,9 +1345,6 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         ReturnFromEStepI(parameters, nid);
         
         if (_debug)
-          for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
-            cout << "_slice_weight_cpu[" << inputIndex << "]: " << _sliceWeightCPU[inputIndex] << endl; 
-          }
           cout << "---------------------------------------" << endl;
         break;
       }
@@ -1419,7 +1388,6 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         ReturnFromScale(nid);
 
         if (_debug) {
-          PrintVector(_scaleCPU, "ScaleCPU");
           PrintImageSums();
           cout << "---------------------------------------" << endl;
         }
@@ -1436,8 +1404,9 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         ReturnFromSuperResolution(nid);
 
         if (_debug) {
-          cout << "Addon: " << SumImage(_addon) << endl;
-          cout << "ConfidenceMap: " << SumImage(_confidenceMap) << endl;
+          cout << fixed << "Addon: " << SumImage(_addon) << endl;
+          cout << fixed << "ConfidenceMap: " 
+            << SumImage(_confidenceMap) << endl;
           cout << "---------------------------------------" << endl;
         }
 

@@ -283,6 +283,16 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     void ReturnFromScale(ebbrt::IOBuf::DataPointer & dp);
 
     //SuperResolution() function
+    void AdaptiveRegularization2(vector<irtkRealImage> &_b,
+        vector<double> &_factor, irtkRealImage &_original);
+
+    void AdaptiveRegularization1(vector<irtkRealImage> &_b,
+        vector<double> &_factor, irtkRealImage &_original);
+
+    void AdaptiveRegularization(int iteration, irtkRealImage &original);
+
+    void BiasCorrectVolume(irtkRealImage &original);
+
     void SuperResolution(int iteration);
 
     void ReturnFromSuperResolution(ebbrt::IOBuf::DataPointer & dp);
