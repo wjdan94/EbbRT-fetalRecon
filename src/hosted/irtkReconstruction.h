@@ -234,6 +234,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     struct reconstructionParameters CreateReconstructionParameters(
         int start, int end);
 
+    void Gather(string fn);
+
     void ReturnFrom();
 
     // CoeffInit() function

@@ -1165,6 +1165,17 @@ void irtkReconstruction::InitializeEM() {
   }
 }
 
+void irtkReconstruction::Gather(string fn) {
+  _future = ebbrt::Promise<int>();
+  auto f = _future.GetFuture();
+  if (_debug)
+    cout << fn << "(): Blocking" << endl;
+
+  f.Block();
+  if (_debug)
+    cout << fn << "(): Returned from future" << endl;
+}
+
 void irtkReconstruction::Execute() {
   int recIterations = _recIterationsFirst;
   for (int it = 0; it < _iterations; it++) {
@@ -1331,14 +1342,7 @@ void irtkReconstruction::CoeffInit(int iteration) {
 
   } 
 
-  _future = ebbrt::Promise<int>();
-  auto f = _future.GetFuture();
-  if (_debug)
-    cout << "CoeffInit(): Blocking" << endl;
-
-  f.Block();
-  if (_debug)
-    cout << "CoeffInit(): Returned from future" << endl;
+  Gather("CoeffInit");
 
   if (_debug) {
     cout << "---------------------------------------" << endl;
@@ -1381,14 +1385,7 @@ void irtkReconstruction::GaussianReconstruction() {
     SendMessage(_nids[i], std::move(buf));
   }
 
-  _future = ebbrt::Promise<int>();
-  auto f = _future.GetFuture();
-  if (_debug)
-    cout << "GaussianReconstruction(): Blocking" << endl;
-
-  f.Block();
-  if (_debug)
-    cout << "GaussianReconstruction(): Returned from future" << endl;
+  Gather("GaussianReconstruction");
 
   _reconstructed /= _volumeWeights;
 
@@ -1415,14 +1412,7 @@ void irtkReconstruction::SimulateSlices() {
     SendMessage(_nids[i], std::move(buf));
   }
 
-  _future = ebbrt::Promise<int>();
-  auto f = _future.GetFuture();
-  if (_debug)
-    cout << "SimulateSlices(): Blocking" << endl;
-
-  f.Block();
-  if (_debug)
-    cout << "SimulateSlices(): Returned from future" << endl;
+  Gather("SimulateSlices");
 
   if (_debug) {
     cout << "---------------------------------------" << endl;
@@ -1447,14 +1437,7 @@ void irtkReconstruction::InitializeRobustStatistics() {
     SendMessage(_nids[i], std::move(buf));
   }
 
-  _future = ebbrt::Promise<int>();
-  auto f = _future.GetFuture();
-  if (_debug)
-    cout << "InitializeRobustStatistics(): Blocking" << endl;
-
-  f.Block();
-  if (_debug)
-    cout << "InitializeRobustStatistics(): Returned from future" << endl;
+  Gather("InitializeRobustStatistics");
 
   _sigmaCPU = _sigmaSum / _numSum;
   _mCPU = 1 / (2.1 * _maxIntensity - 1.9 * _minIntensity);
@@ -1502,15 +1485,9 @@ void irtkReconstruction::EStepI() {
     SendMessage(_nids[i], std::move(buf));
   }
   
-  _future = ebbrt::Promise<int>();
-  auto f = _future.GetFuture();
-  if (_debug)
-    cout << "EStepI(): Blocking" << endl;
+  Gather("EStepI");
 
-  f.Block();
   if (_debug) {
-    cout << "EStepI(): Returned from future" << endl;
-    
     cout << "---------------------------------------" << endl;
     cout << "                ESTEP_I                " << endl;
     cout << "_sum: " << _sum << endl;
@@ -1562,14 +1539,7 @@ void irtkReconstruction::EStepII() {
     SendMessage(_nids[i], std::move(buf));
   }
 
-  _future = ebbrt::Promise<int>();
-  auto f = _future.GetFuture();
-  if (_debug)
-    cout << "EStepII(): Blocking" << endl;
-
-  f.Block();
-  if (_debug) 
-    cout << "EStepII(): Returned from future" << endl;
+  Gather("EStepII");
 
   if (_debug) {
     cout << "---------------------------------------" << endl;
@@ -1633,14 +1603,7 @@ void irtkReconstruction::EStepIII() {
     SendMessage(_nids[i], std::move(buf));
   }
 
-  _future = ebbrt::Promise<int>();
-  auto f = _future.GetFuture();
-  if (_debug)
-    cout << "EStepIII(): Blocking" << endl;
-
-  f.Block();
-  if (_debug) 
-    cout << "EStepIII(): Returned from future" << endl;
+  Gather("EStepIII");
 
   if (_debug) {
     cout << "---------------------------------------" << endl;
@@ -1680,15 +1643,7 @@ void irtkReconstruction::Scale() {
     SendMessage(_nids[i], std::move(buf));
   }
 
-  _future = ebbrt::Promise<int>();
-  auto f = _future.GetFuture();
-  if (_debug)
-    cout << "Scale(): Blocking" << endl;
-
-  f.Block();
-  if (_debug) {
-    cout << "Scale(): Returned from future" << endl;
-  }
+  Gather("Scale");
 }
 
 void irtkReconstruction::AdaptiveRegularization2(vector<irtkRealImage> &_b,
@@ -1894,15 +1849,7 @@ void irtkReconstruction::SuperResolution(int iteration) {
     SendMessage(_nids[i], std::move(buf));
   }
 
-  _future = ebbrt::Promise<int>();
-  auto f = _future.GetFuture();
-  if (_debug)
-    cout << "SuperResolution(): Blocking" << endl;
-
-  f.Block();
-  if (_debug) {
-    cout << "SuperResolution(): Returned from future" << endl;
-  }
+  Gather("SuperResolution");
 
   if (!_adaptive)
     for (int i = 0; i < _addon.GetX(); i++) {
