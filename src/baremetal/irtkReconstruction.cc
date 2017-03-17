@@ -798,19 +798,23 @@ void irtkReconstruction::ParallelSimulateSlices() {
 
 void irtkReconstruction::SimulateSlices(ebbrt::IOBuf::DataPointer& dp) {
 
-  _simulatedSlices.clear();
-  _simulatedWeights.clear();
-  _simulatedInside.clear();
+  int initialize = dp.Get<int>();
+  cout << "Initialize: " << initialize << endl;
 
-  for(int i= 0 ; i < (int) _slices.size(); i++) {
-    _simulatedSlices.push_back(_slices[i]);
-    _simulatedWeights.push_back(_slices[i]);
-    _simulatedInside.push_back(_slices[i]);
+  if (initialize) {
+    _simulatedSlices.clear();
+    _simulatedWeights.clear();
+    _simulatedInside.clear();
+
+    for(int i= 0 ; i < (int) _slices.size(); i++) {
+      _simulatedSlices.push_back(_slices[i]);
+      _simulatedWeights.push_back(_slices[i]);
+      _simulatedInside.push_back(_slices[i]);
+    }
   }
 
   int reconSize = dp.Get<int>();
   dp.Get(reconSize*sizeof(double), (uint8_t*)_reconstructed.GetMat());
-
 
   ParallelSimulateSlices();
 }
@@ -1248,6 +1252,73 @@ void irtkReconstruction::ReturnFromSuperResolution(
 
 /* End of Superresolution */
 
+/*
+ * MStep functions
+ */
+void irtkReconstruction::ParallelMStep(mStepReturnParameters& parameters) {
+  for (int inputIndex = _start; inputIndex < _end; ++inputIndex) {
+    
+    irtkRealImage slice = _slices[inputIndex];
+
+    irtkRealImage &w = _weights[inputIndex];
+
+    irtkRealImage &b = _bias[inputIndex];
+
+    // [fetalReconstruction] identify scale factor
+    double scale = _scaleCPU[inputIndex];
+
+    // [fetalReconstruction] calculate error
+    for (int i = 0; i < slice.GetX(); i++) {
+      for (int j = 0; j < slice.GetY(); j++) {
+        if (slice(i, j, 0) != -1) {
+          // [fetalReconstruction] bias correct and scale the slice
+          slice(i, j, 0) *= exp(-b(i, j, 0)) * scale;
+
+          // [fetalReconstruction] otherwise the error has no meaning - 
+          // [fetalReconstruction] it is equal to slice intensity
+          if (_simulatedWeights[inputIndex](i, j, 0) > 0.99) {
+
+            slice(i, j, 0) -=
+                _simulatedSlices[inputIndex](i, j, 0);
+
+            double e = slice(i, j, 0);
+            parameters.sigma += e * e * w(i, j, 0);
+            parameters. mix += w(i, j, 0);
+
+            if (e < parameters.min)
+             parameters. min = e;
+            if (e > parameters.max)
+              parameters.max = e;
+
+            parameters.num++;
+          }
+        }
+      }
+    }
+  } 
+}
+
+void irtkReconstruction::MStep(mStepReturnParameters& parameters,
+    ebbrt::IOBuf::DataPointer& dp) {
+  parameters.sigma = 0;
+  parameters.mix = 0;
+  parameters.num = 0;
+  parameters.min = 0;
+  parameters.max = 0;
+
+  ParallelMStep(parameters);
+}
+
+void irtkReconstruction::ReturnFromMStep(mStepReturnParameters& parameters,
+    Messenger::NetworkId frontEndNid) {
+  auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(mStepReturnParameters));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = M_STEP;
+  dp.Get<mStepReturnParameters>() = parameters;
+  SendMessage(frontEndNid, std::move(buf));
+}
+/* End of MStep*/
+
 void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
   auto buf = MakeUniqueIOBuf(sizeof(int));
   auto dp = buf->GetMutDataPointer();
@@ -1260,6 +1331,7 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
   auto dp = buffer->GetDataPointer();
   auto fn = dp.Get<int>();
 
+  cout << "Receiving function: " << fn << endl;
   switch(fn) {
     case COEFF_INIT:
       {
@@ -1309,6 +1381,9 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
 
         if (_debug) {
           PrintImageSums();
+          //PrintVectorSums(_simulatedSlices, "Simulated Slices");    
+          //PrintVectorSums(_simulatedWeights, "Simulated Weights");    
+          //PrintVectorSums(_simulatedInside, "Simulated Inside");
           cout << "---------------------------------------" << endl;
         }
 
@@ -1412,6 +1487,27 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
 
         break;
       }
+    case M_STEP:
+      {
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "                MSTEP                  " << endl;
+        }
+        mStepReturnParameters parameters;
+        MStep(parameters, dp);
+        ReturnFromMStep(parameters, nid);
+        
+        if (_debug) {
+          cout << "sigma: " << parameters.sigma << endl;
+          cout << "mix: " << parameters.mix << endl;
+          cout << "num: " << parameters.num << endl;
+          cout << "min: " << parameters.min << endl;
+          cout << "max: " << parameters.max << endl;
+          cout << "---------------------------------------" << endl;
+        }
+        break;
+      }
+
     default:
       cout << "Invalid option" << endl;
   }

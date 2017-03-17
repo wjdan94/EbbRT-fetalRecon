@@ -497,6 +497,18 @@ void irtkReconstruction::ReturnFromSuperResolution(
   ReturnFrom();
 }
 
+void irtkReconstruction::ReturnFromMStep(ebbrt::IOBuf::DataPointer & dp) {
+
+  auto parameters = dp.Get<struct mStepReturnParameters>();
+  _mSigma += parameters.sigma;
+  _mMix += parameters.mix;
+  _mNum += parameters.num;
+  _mMax = (_mMax > parameters.max) ? _mMax : parameters.max;
+  _mMin = (_mMin < parameters.min) ? _mMin : parameters.min;
+
+  ReturnFrom();
+}
+
 irtkRealImage irtkReconstruction::CreateMask(irtkRealImage image) {
   // [fetalRecontruction] binarize mask
   irtkRealPixel *ptr = image.GetPointerToVoxels();
@@ -739,9 +751,6 @@ void irtkReconstruction::SetMask(irtkRealImage *mask, double sigma,
   }
   // [fetalRecontruction] set flag that mask was created
   _haveMask = true;
-
-  if (_debug)
-    _mask.Write("mask.nii");
 }
 
 // TODO: This can be moved into another file
@@ -950,10 +959,6 @@ void irtkReconstruction::MatchStackIntensitiesWithMasking(
               m(i, j, k) = 0;
           }
         }
-    if (_debug) {
-      sprintf(buffer, "mask-for-matching%i.nii.gz", ind);
-      m.Write(buffer);
-    }
     // [fetalRecontruction] calculate average for the stack
     if (num > 0)
       stack_average.push_back(sum / num);
@@ -1000,11 +1005,6 @@ void irtkReconstruction::MatchStackIntensitiesWithMasking(
   }
 
   if (_debug) {
-    for (ind = 0; ind < stacks.size(); ind++) {
-      sprintf(buffer, "rescaled-stack%i.nii.gz", ind);
-      stacks[ind].Write(buffer);
-    }
-
     cout << "Slice intensity factors are ";
     for (ind = 0; ind < stack_average.size(); ind++)
       cout << _stackFactor[ind] << " ";
@@ -1209,7 +1209,7 @@ void irtkReconstruction::Execute() {
 
     GaussianReconstruction();
 
-    SimulateSlices();
+    SimulateSlices(true);
 
     InitializeRobustStatistics();
 
@@ -1231,7 +1231,6 @@ void irtkReconstruction::Execute() {
       cout << "_sigma: " << _sigma << endl;
       cout << "---------------------------------------" << endl;
       if (_intensityMatching) {
-        // calculate bias fields
         if (!_disableBiasCorr) {
           //TODO: implement Bias() function
           //TODO: figure out what happens with sigma. In the original
@@ -1239,11 +1238,24 @@ void irtkReconstruction::Execute() {
           //if (_sigma > 0) 
             //Bias();
         }
-        // calculate scales
         Scale();
       }
 
       SuperResolution(it + 1);
+
+      if (_intensityMatching) {
+        if (!_disableBiasCorr) {
+          //TODO: implement NormalizeBias() function
+          //TODO: figure out what happens with sigma. In the original
+          // the value at this point is 12, but here is 20.
+          //if (_sigma > 0 && !_globalBiasCorrection) 
+            //NormalizeBias(it);
+        }
+      }
+
+      SimulateSlices(false);
+
+      MStep(it + 1);
     }
   }
 }
@@ -1400,12 +1412,13 @@ void irtkReconstruction::GaussianReconstruction() {
   }
 }
 
-void irtkReconstruction::SimulateSlices() {
+void irtkReconstruction::SimulateSlices(bool initialize) {
   for (int i = 0; i < (int) _nids.size(); i++) {
-    auto buf = MakeUniqueIOBuf(sizeof(int));
+    auto buf = MakeUniqueIOBuf(2*sizeof(int));
     auto dp = buf->GetMutDataPointer();
 
     dp.Get<int>() = SIMULATE_SLICES;
+    dp.Get<int>() = (int) initialize;
     buf->PrependChain(std::move(serializeSlices(_reconstructed)));
 
     _totalBytes += buf->ComputeChainDataLength();
@@ -1418,6 +1431,58 @@ void irtkReconstruction::SimulateSlices() {
     cout << "---------------------------------------" << endl;
     cout << "           SIMULATE SLICES             " << endl;
     PrintImageSums();
+    cout << "---------------------------------------" << endl;
+  }
+}
+
+void irtkReconstruction::MStep(int iteration) {
+
+  _mSigma = 0.0;
+  _mMix = 0.0;
+  _mMin = 0.0;
+  _mMax = 0.0;
+  _mNum = 0.0;
+
+  for (int i = 0; i < (int) _nids.size(); i++) {
+    auto buf = MakeUniqueIOBuf(sizeof(int));
+    auto dp = buf->GetMutDataPointer();
+
+    dp.Get<int>() = M_STEP;
+
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
+
+  Gather("MStep");
+
+  if (_mMix > 0) {
+    _sigmaCPU = _mSigma / _mMix;
+  } else {
+    cerr << "ERROR: MStep _mMix <= 0" << endl;
+    ebbrt::Cpu::Exit(EXIT_FAILURE);
+  }
+
+  if (_sigmaCPU < _step * _step / _sigmaFactor) {
+    _sigmaCPU = _step * _step / _sigmaSum;
+  }
+
+  if (iteration > 1) {
+    _mixCPU = _mMix / _mNum;
+  }
+
+  _mCPU = 1 / (_mMax - _mMin);
+
+  if (_debug) {
+    cout << "---------------------------------------" << endl;
+    cout << "                 MSTEP                 " << endl;
+    //cout << "_mSigma: " << _mSigma << endl;
+    //cout << "_mMix: " << _mMix << endl;
+    //cout << "_mNum: " << _mNum << endl;
+    //cout << "_mMin: " << _mMin << endl;
+    //cout << "_mMax: " << _mMax << endl;
+    cout << "_sigmaCPU: " << _sigmaCPU << endl;
+    cout << "_mixCPU: " << _mixCPU << endl;
+    cout << "_mCPU: " << _mCPU << endl;
     cout << "---------------------------------------" << endl;
   }
 }
@@ -1551,24 +1616,22 @@ void irtkReconstruction::EStepII() {
   }
 
   // [fetalRecontruction] do not allow too small sigma
-  double sigmaFactor = 6.28;
-
   if ((_sum > 0) && (_den > 0)) {
     _sigmaSCPU = _sum / _den;
-    if (_sigmaSCPU < _step * _step / sigmaFactor)
-      _sigmaSCPU = _step * _step / sigmaFactor;
+    if (_sigmaSCPU < _step * _step / _sigmaFactor)
+      _sigmaSCPU = _step * _step / _sigmaFactor;
   } else {
     _sigmaSCPU = 0.025;
   }
 
   if ((_sum2 > 0) && (_den2 > 0)) {
     _sigmaS2CPU = _sum2 / _den2;
-    if (_sigmaS2CPU < _step * _step / sigmaFactor)
-      _sigmaS2CPU = _step * _step / sigmaFactor;
+    if (_sigmaS2CPU < _step * _step / _sigmaFactor)
+      _sigmaS2CPU = _step * _step / _sigmaFactor;
   } else {
     _sigmaS2CPU = (_meanS2CPU - _meanSCPU) * (_meanS2CPU - _meanSCPU) / 4;
-    if (_sigmaS2CPU < _step * _step / sigmaFactor)
-      _sigmaS2CPU = _step * _step / sigmaFactor;
+    if (_sigmaS2CPU < _step * _step / _sigmaFactor)
+      _sigmaS2CPU = _step * _step / _sigmaFactor;
   }
 
   if (_debug) {
@@ -1999,6 +2062,11 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
     case SUPERRESOLUTION:
       {
         ReturnFromSuperResolution(dp);
+        break;
+      }
+    case M_STEP:
+      {
+        ReturnFromMStep(dp);
         break;
       }
     default:

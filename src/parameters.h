@@ -10,6 +10,7 @@
 #define E_STEP_III 6
 #define SCALE 7
 #define SUPERRESOLUTION 8
+#define M_STEP 9
 
 #define ITERATION_DONE 14
 
@@ -65,6 +66,15 @@ struct eStepReturnParameters {
   double maxs; 
   double mins;
   double num;
+};
+
+// MStep() function parameters
+struct mStepReturnParameters {
+  double sigma;
+  double mix;
+  double num;
+  double min; 
+  double max; 
 };
 
 #endif // PARAMETERS_H

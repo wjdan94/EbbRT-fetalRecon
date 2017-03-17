@@ -12,6 +12,7 @@
 #include <ebbrt/IOBuf.h>
 #include <ebbrt/UniqueIOBuf.h>
 #include <ebbrt/StaticIOBuf.h>
+#include <ebbrt/Cpu.h>
 
 using namespace ebbrt;
 
@@ -77,6 +78,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     bool _disableBiasCorr; // Not used
 
     // Internal parameters
+    const double _sigmaFactor = 6.28;
+    
     irtkRealImage _externalRegistrationTargetImage;
     irtkRealImage _reconstructed;
     irtkRealImage _mask;
@@ -156,6 +159,14 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     // SuperResolution() variables
     irtkRealImage _confidenceMap;
     irtkRealImage _addon;
+
+    // MStep() variables
+    // TODO: figure out if all these variables are needed
+    double _mSigma;
+    double _mMix;
+    double _mNum;
+    double _mMin;
+    double _mMax;
 
   public:
 
@@ -255,7 +266,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     void ReturnFromGaussianReconstruction(ebbrt::IOBuf::DataPointer & dp);
 
     //SimulateSlices() function
-    void SimulateSlices();
+    void SimulateSlices(bool initialize);
 
     void ReturnFromSimulateSlices(ebbrt::IOBuf::DataPointer & dp);
 
@@ -298,6 +309,11 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     void SuperResolution(int iteration);
 
     void ReturnFromSuperResolution(ebbrt::IOBuf::DataPointer & dp);
+
+    //MStep() function
+    void MStep(int iteration);
+
+    void ReturnFromMStep(ebbrt::IOBuf::DataPointer & dp);
 
     // Start program execution
     void Execute();

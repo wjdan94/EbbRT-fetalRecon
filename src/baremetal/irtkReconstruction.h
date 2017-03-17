@@ -188,6 +188,17 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void ReturnFromSuperResolution(Messenger::NetworkId nid);
 
+
+    // MStep functions
+    void ParallelMStep( mStepReturnParameters& parameters);
+
+    void MStep(mStepReturnParameters& parameters, ebbrt::IOBuf::DataPointer& dp);
+
+    void ReturnFromMStep(mStepReturnParameters& parameters,
+        Messenger::NetworkId nid);
+
+    //
+
     void ReturnFrom(int fn, ebbrt::Messenger::NetworkId frontEndNid);
 
     // Debugging functions

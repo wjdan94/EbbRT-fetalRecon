@@ -316,11 +316,6 @@ irtkRealImage* getMask(EbbRef<irtkReconstruction> reconstruction,
                                   stackTransformations[templateNumber]);
     // Crop template stack
     reconstruction->CropImage(stacks[templateNumber], m);
-
-    if (ARGUMENTS.debug) {
-      m.Write("maskTemplate.nii.gz");
-      stacks[templateNumber].Write("croppedTemplate.nii.gz");
-    }
   }
 
   return mask;
