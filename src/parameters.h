@@ -55,6 +55,8 @@ struct eStepParameters {
   double meanS2CPU;
   double sigmaSCPU;
   double sigmaS2CPU;
+  double mixSCPU;
+  double mixCPU;
   double den;
 };
 

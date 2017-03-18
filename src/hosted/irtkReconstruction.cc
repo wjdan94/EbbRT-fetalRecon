@@ -1256,6 +1256,8 @@ void irtkReconstruction::Execute() {
       SimulateSlices(false);
 
       MStep(it + 1);
+
+      EStep();
     }
   }
 }
@@ -1463,7 +1465,7 @@ void irtkReconstruction::MStep(int iteration) {
   }
 
   if (_sigmaCPU < _step * _step / _sigmaFactor) {
-    _sigmaCPU = _step * _step / _sigmaSum;
+    _sigmaCPU = _step * _step / _sigmaFactor;
   }
 
   if (iteration > 1) {
@@ -1523,6 +1525,7 @@ void irtkReconstruction::EStepI() {
 
   parameters.mCPU = _mCPU;
   parameters.sigmaCPU = _sigmaCPU;
+  parameters.mixCPU = _mixCPU;
 
   _sum = 0.0;
   _den = 0.0;
@@ -1652,6 +1655,7 @@ void irtkReconstruction::EStepIII() {
   parameters.meanS2CPU = _meanS2CPU;
   parameters.sigmaSCPU = _sigmaSCPU;
   parameters.sigmaS2CPU = _sigmaS2CPU;
+  parameters.mixSCPU = _mixSCPU;
   parameters.den = _den;
 
   for (int i = 0; i < (int) _nids.size(); i++) {

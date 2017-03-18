@@ -974,6 +974,7 @@ void irtkReconstruction::StoreEStepParameters(
   auto parameters = dp.Get<struct eStepParameters>();
   _mCPU = parameters.mCPU;
   _sigmaCPU = parameters.sigmaCPU;
+  _mixCPU = parameters.mixCPU;
 
   int smallSlicesSize = dp.Get<int>();
   _smallSlices.resize(smallSlicesSize);
@@ -990,6 +991,10 @@ struct eStepReturnParameters irtkReconstruction::EStepI(
   parameters.den2 = 0;
   parameters.maxs = 0;
   parameters.mins = 1;
+
+  for (int i = 0; i < _slicePotential.size(); i++)
+    _slicePotential[i] = 0;
+  
   ParallelEStep(parameters);
   return parameters;
 }
@@ -1000,7 +1005,7 @@ struct eStepReturnParameters irtkReconstruction::EStepII(
   auto parameters = dp.Get<struct eStepParameters>();
   double meanSCPU = parameters.meanSCPU;
   double meanS2CPU = parameters.meanS2CPU;
-
+  
   struct eStepReturnParameters returnParameters;
   returnParameters.sum = 0;
   returnParameters.den = 0;
@@ -1034,6 +1039,7 @@ struct eStepReturnParameters irtkReconstruction::EStepIII(
   double meanSCPU = parameters.meanSCPU;
   double meanS2CPU = parameters.meanS2CPU;
   double den = parameters.den;
+  double mixSCPU = parameters.mixSCPU;
 
   struct eStepReturnParameters returnParameters;
   returnParameters.sum = 0;
@@ -1067,9 +1073,9 @@ struct eStepReturnParameters irtkReconstruction::EStepIII(
       gs2 = 0;
 
     // [fetalReconstruction] calculate slice weight
-    double likelihood = gs1 * _mixSCPU + gs2 * (1 - _mixSCPU);
+    double likelihood = gs1 * mixSCPU + gs2 * (1 - mixSCPU);
     if (likelihood > 0)
-      _sliceWeightCPU[inputIndex] = gs1 * _mixSCPU / likelihood;
+      _sliceWeightCPU[inputIndex] = gs1 * mixSCPU / likelihood;
     else {
       if (_slicePotential[inputIndex] <= meanSCPU)
         _sliceWeightCPU[inputIndex] = 1;
@@ -1303,8 +1309,8 @@ void irtkReconstruction::MStep(mStepReturnParameters& parameters,
   parameters.sigma = 0;
   parameters.mix = 0;
   parameters.num = 0;
-  parameters.min = 0;
-  parameters.max = 0;
+  parameters.min = voxel_limits<irtkRealPixel>::max();
+  parameters.max = voxel_limits<irtkRealPixel>::min();
 
   ParallelMStep(parameters);
 }
