@@ -1325,6 +1325,77 @@ void irtkReconstruction::ReturnFromMStep(mStepReturnParameters& parameters,
 }
 /* End of MStep*/
 
+/*
+ * RestoreSliceIntensities functions
+ */
+
+void irtkReconstruction::RestoreSliceIntensities() {
+  double factor;
+  irtkRealPixel *p;
+  for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
+      // [fetalRecontruction] calculate scaling factor 
+      // [fetalRecontruction] _average_value;
+      factor = _stackFactor[_stackIndex[inputIndex]];
+      // [fetalRecontruction] read the pointer to current slice
+      p = _slices[inputIndex].GetPointerToVoxels();
+      for (int i = 0; i < _slices[inputIndex].GetNumberOfVoxels(); i++)
+      {
+	  if (*p > 0)
+	      *p = *p / factor;
+	  p++;
+      }
+  }
+}
+
+void irtkReconstruction::ReturnFromRestoreSliceIntensities(Messenger::NetworkId frontEndNid) {
+  ReturnFrom(RESTORE_SLICE_INTENSITIES, frontEndNid);
+}
+/* End of RestoreSliceIntensities*/
+
+/*
+ * ScaleVolume functions
+ */
+
+struct scaleVolumeParameters irtkReconstruction::ScaleVolume() {
+  scaleVolumeParameters parameters;
+  parameters.num = 0;
+  parameters.den = 0;
+
+  for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
+    irtkRealImage &slice = _slices[inputIndex];
+    irtkRealImage &w = _weights[inputIndex];
+    irtkRealImage &sim = _simulatedSlices[inputIndex];
+
+    for (int i = 0; i < slice.GetX(); i++) {
+      for (int j = 0; j < slice.GetY(); j++) {
+        if (slice(i, j, 0) != -1) {
+          // [fetalRecontruction] scale - intensity matching
+          if (_simulatedWeights[inputIndex](i, j, 0) > 0.99) {
+            parameters.num += w(i, j, 0) * _sliceWeightCPU[inputIndex] *
+              slice(i, j, 0) * sim(i, j, 0);
+            parameters.den += w(i, j, 0) * _sliceWeightCPU[inputIndex] *
+              sim(i, j, 0) * sim(i, j, 0);
+          }
+        }
+      }
+    }
+  } 
+  return parameters;
+}
+
+void irtkReconstruction::ReturnFromScaleVolume(struct scaleVolumeParameters parameters,
+    Messenger::NetworkId frontEndNid) {
+  
+  auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(scaleVolumeParameters));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = SCALE_VOLUME;
+  dp.Get<scaleVolumeParameters>() = parameters;
+  SendMessage(frontEndNid, std::move(buf));
+
+}
+/* End of ScaleVolume */
+
+
 void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
   auto buf = MakeUniqueIOBuf(sizeof(int));
   auto dp = buf->GetMutDataPointer();
@@ -1513,7 +1584,35 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         }
         break;
       }
+    case RESTORE_SLICE_INTENSITIES:
+      {
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "       RESTORE_SLICE_INTENSITIES       " << endl;
+        }
 
+        RestoreSliceIntensities();
+        ReturnFromRestoreSliceIntensities(nid);
+        
+        if (_debug)
+          cout << "---------------------------------------" << endl;
+
+        break;  
+      }
+    case SCALE_VOLUME: 
+      {
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "             SCALE_VOLUME              " << endl;
+        }
+
+        auto parameters = ScaleVolume();
+        ReturnFromScaleVolume(parameters, nid);
+
+        if (_debug)
+          cout << "---------------------------------------" << endl;
+        break;
+      }
     default:
       cout << "Invalid option" << endl;
   }

@@ -509,6 +509,20 @@ void irtkReconstruction::ReturnFromMStep(ebbrt::IOBuf::DataPointer & dp) {
   ReturnFrom();
 }
 
+void irtkReconstruction::ReturnFromRestoreSliceIntensities(
+    ebbrt::IOBuf::DataPointer & dp) {
+  ReturnFrom();
+}
+
+void irtkReconstruction::ReturnFromScaleVolume(
+    ebbrt::IOBuf::DataPointer & dp) {
+
+  auto parameters = dp.Get<struct scaleVolumeParameters>();
+  _num += parameters.num;
+  _den += parameters.den;
+  ReturnFrom();
+}
+
 irtkRealImage irtkReconstruction::CreateMask(irtkRealImage image) {
   // [fetalRecontruction] binarize mask
   irtkRealPixel *ptr = image.GetPointerToVoxels();
@@ -1176,6 +1190,17 @@ void irtkReconstruction::Gather(string fn) {
     cout << fn << "(): Returned from future" << endl;
 }
 
+void irtkReconstruction::MaskVolume() {
+  irtkRealPixel *pr = _reconstructed.GetPointerToVoxels();
+  irtkRealPixel *pm = _mask.GetPointerToVoxels();
+  for (int i = 0; i < _reconstructed.GetNumberOfVoxels(); i++) {
+    if (*pm == 0)
+      *pr = -1;
+    pm++;
+    pr++;
+  }
+}
+
 void irtkReconstruction::Execute() {
   int recIterations;
   for (int it = 0; it < _iterations; it++) {
@@ -1262,7 +1287,21 @@ void irtkReconstruction::Execute() {
 
       EStep();
     }
+
+    MaskVolume();
+
+    if (_debug) {
+      cout << endl;
+      cout << "End of reconstruction iterations" << endl;
+      PrintImageSums();
+      cout << endl;
+    }
+    // TODO: implement Evaluate()
   }
+
+  RestoreSliceIntensities();
+
+  ScaleVolume();
 }
 
 struct coeffInitParameters irtkReconstruction::createCoeffInitParameters() {
@@ -1488,6 +1527,54 @@ void irtkReconstruction::MStep(int iteration) {
     cout << "_sigmaCPU: " << _sigmaCPU << endl;
     cout << "_mixCPU: " << _mixCPU << endl;
     cout << "_mCPU: " << _mCPU << endl;
+    cout << "---------------------------------------" << endl;
+  }
+}
+
+void irtkReconstruction::RestoreSliceIntensities() {
+
+  for (int i = 0; i < (int) _nids.size(); i++) {
+    auto buf = MakeUniqueIOBuf(sizeof(int));
+    auto dp = buf->GetMutDataPointer();
+
+    dp.Get<int>() = RESTORE_SLICE_INTENSITIES;
+
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
+
+  Gather("RestoreSliceIntensities");
+}
+
+void irtkReconstruction::ScaleVolume() {
+  _num = 0;
+  _den = 0;
+
+  for (int i = 0; i < (int) _nids.size(); i++) {
+    auto buf = MakeUniqueIOBuf(sizeof(int));
+    auto dp = buf->GetMutDataPointer();
+
+    dp.Get<int>() = SCALE_VOLUME;
+
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
+
+  Gather("ScaleVolume");
+
+  double scale = _num / _den;
+  irtkRealPixel *ptr = _reconstructed.GetPointerToVoxels();
+
+  for (int i = 0; i < _reconstructed.GetNumberOfVoxels(); i++) {
+    if (*ptr>0) *ptr = *ptr * scale;
+    ptr++;
+  }
+
+  if (_debug) {
+    cout << "---------------------------------------" << endl;
+    cout << "              SCALE VOLUME             " << endl;
+    PrintImageSums();
+    cout << "scale: " << scale << endl;
     cout << "---------------------------------------" << endl;
   }
 }
@@ -2074,6 +2161,16 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
     case M_STEP:
       {
         ReturnFromMStep(dp);
+        break;
+      }
+    case RESTORE_SLICE_INTENSITIES: 
+      {
+        ReturnFromRestoreSliceIntensities(dp); 
+        break;
+      }
+    case SCALE_VOLUME:
+      {
+        ReturnFromScaleVolume(dp);
         break;
       }
     default:

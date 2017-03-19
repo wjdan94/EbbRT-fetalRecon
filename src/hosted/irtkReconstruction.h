@@ -199,6 +199,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
 
     irtkRealImage CreateMask(irtkRealImage image);
 
+    void MaskVolume();
+
     void TransformMask(irtkRealImage& image,
         irtkRealImage& mask,
         irtkRigidTransformation& transformation);
@@ -314,6 +316,16 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     void MStep(int iteration);
 
     void ReturnFromMStep(ebbrt::IOBuf::DataPointer & dp);
+
+    //RestoreSliceIntensities() function
+    void RestoreSliceIntensities();
+
+    void ReturnFromRestoreSliceIntensities( ebbrt::IOBuf::DataPointer & dp);
+
+    //ScaleVolume() function
+    void ScaleVolume();
+
+    void ReturnFromScaleVolume(ebbrt::IOBuf::DataPointer & dp);
 
     // Start program execution
     void Execute();

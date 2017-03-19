@@ -197,6 +197,19 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void ReturnFromMStep(mStepReturnParameters& parameters,
         Messenger::NetworkId nid);
 
+    // RestoreSliceIntensities functions
+
+    void RestoreSliceIntensities();
+
+    void ReturnFromRestoreSliceIntensities(Messenger::NetworkId nid);
+
+    // ScaleVolume functions
+
+    struct scaleVolumeParameters ScaleVolume();
+    
+    void ReturnFromScaleVolume(struct scaleVolumeParameters parameters,
+        Messenger::NetworkId nid);
+
     //
 
     void ReturnFrom(int fn, ebbrt::Messenger::NetworkId frontEndNid);

@@ -11,6 +11,8 @@
 #define SCALE 7
 #define SUPERRESOLUTION 8
 #define M_STEP 9
+#define RESTORE_SLICE_INTENSITIES 10
+#define SCALE_VOLUME 11
 
 #define ITERATION_DONE 14
 
@@ -77,6 +79,12 @@ struct mStepReturnParameters {
   double num;
   double min; 
   double max; 
+};
+
+//ScaleVOlume() function parameters
+struct scaleVolumeParameters {
+  double num;
+  double den;
 };
 
 #endif // PARAMETERS_H
