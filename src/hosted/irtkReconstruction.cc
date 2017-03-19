@@ -1177,7 +1177,7 @@ void irtkReconstruction::Gather(string fn) {
 }
 
 void irtkReconstruction::Execute() {
-  int recIterations = _recIterationsFirst;
+  int recIterations;
   for (int it = 0; it < _iterations; it++) {
     if (_debug)
       cout << "Iteration " << it << endl;
@@ -1222,7 +1222,10 @@ void irtkReconstruction::Execute() {
       recIterations = _recIterationsFirst;
     }
 
-    for (int i = 0; i < recIterations; i++) {
+    for (int recIt = 0; recIt < recIterations; recIt++) {
+
+      if (_debug)
+        cout << "Reconstruction iteration " << recIt << endl;
 
       cout << "---------------------------------------" << endl;
       cout << "            Bias Correction            " << endl;
@@ -1241,7 +1244,7 @@ void irtkReconstruction::Execute() {
         Scale();
       }
 
-      SuperResolution(it + 1);
+      SuperResolution(recIt + 1);
 
       if (_intensityMatching) {
         if (!_disableBiasCorr) {
@@ -1255,7 +1258,7 @@ void irtkReconstruction::Execute() {
 
       SimulateSlices(false);
 
-      MStep(it + 1);
+      MStep(recIt + 1);
 
       EStep();
     }
