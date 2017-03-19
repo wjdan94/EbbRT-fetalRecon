@@ -254,6 +254,10 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     // CoeffInit() function
     struct coeffInitParameters createCoeffInitParameters();
 
+    void CoeffInitBootstrap(struct coeffInitParameters parameters);
+
+    void CoeffInit(struct coeffInitParameters parameters);
+
     void CoeffInit(int iteration);
 
     void ReturnFromCoeffInit(ebbrt::IOBuf::DataPointer & dp);

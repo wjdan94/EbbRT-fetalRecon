@@ -121,8 +121,9 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     
     void StoreParameters(struct reconstructionParameters parameters);
 
-    struct coeffInitParameters StoreCoeffInitParameters(
-        ebbrt::IOBuf::DataPointer& dp);
+    void CoeffInitBootstrap(ebbrt::IOBuf::DataPointer& dp);
+    
+    void StoreCoeffInitParameters(ebbrt::IOBuf::DataPointer& dp);
 
     void InitializeEMValues();
 

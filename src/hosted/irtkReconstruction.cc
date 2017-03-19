@@ -1345,62 +1345,76 @@ irtkReconstruction::CreateReconstructionParameters(int start, int end) {
   return parameters;
 }
 
-void irtkReconstruction::CoeffInit(int iteration) {
-  _volcoeffs.clear();
-  _volcoeffs.resize(_slices.size());
+void irtkReconstruction::CoeffInitBootstrap(
+    struct coeffInitParameters parameters) {
+  int diff = _slices.size();
+  int factor = (int) ceil(diff / (float)(_numBackendNodes));
+  int start;
+  int end;
 
-  _sliceInsideCPU.clear();
-  _sliceInsideCPU.resize(_slices.size());
+  for (int i = 0; i < (int) _numBackendNodes; i++) {
+    start = i * factor;
+    end = i * factor + factor;
+    end = (end > diff) ? diff : end;
 
-  if (iteration == 0) {
-    int diff = _slices.size();
-    int factor = (int) ceil(diff / (float)(_numBackendNodes));
-    int start;
-    int end;
+    cout << "Start: " << start << " End: " << end << endl;
+    auto buf = MakeUniqueIOBuf((2 * sizeof(int)) + 
+        sizeof(struct coeffInitParameters) +
+        sizeof(struct reconstructionParameters));
+    auto dp = buf->GetMutDataPointer();
 
-    for (int i = 0; i < (int) _numBackendNodes; i++) {
-      start = i * factor;
-      end = i * factor + factor;
-      end = (end > diff) ? diff : end;
+    dp.Get<int>() = COEFF_INIT; 
+    dp.Get<int>() = 1;
+    dp.Get<struct coeffInitParameters>() = parameters;
 
-      auto parameters = createCoeffInitParameters();
-      auto reconstructionParameters = 
-        CreateReconstructionParameters(start, end);
-      cout << "Start: " << start << " End: " << end << endl;
+    auto reconstructionParameters = CreateReconstructionParameters(start, end);
+    dp.Get<struct reconstructionParameters>() = reconstructionParameters;
 
-      auto buf = MakeUniqueIOBuf(sizeof(int) + 
-          sizeof(struct coeffInitParameters) +
-          sizeof(struct reconstructionParameters));
-      auto dp = buf->GetMutDataPointer();
+    auto sf = std::make_unique<StaticIOBuf>(
+        reinterpret_cast<const uint8_t *>(_stackFactor.data()),
+        (size_t)(_stackFactor.size() * sizeof(float)));
 
-      dp.Get<int>() = COEFF_INIT; 
-      dp.Get<struct coeffInitParameters>() = parameters;
-      dp.Get<struct reconstructionParameters>() = reconstructionParameters;
+    auto si = std::make_unique<StaticIOBuf>(
+        reinterpret_cast<const uint8_t *>(_stackIndex.data()),
+        (size_t)(_stackIndex.size() * sizeof(int)));
 
-      auto sf = std::make_unique<StaticIOBuf>(
-          reinterpret_cast<const uint8_t *>(_stackFactor.data()),
-          (size_t)(_stackFactor.size() * sizeof(float)));
+    // TODO: Try to move this functions to another file
+    buf->PrependChain(std::move(SerializeSlices()));
+    buf->PrependChain(std::move(SerializeReconstructed()));
+    buf->PrependChain(std::move(SerializeMask()));
+    buf->PrependChain(std::move(SerializeTransformations()));
+    buf->PrependChain(std::move(sf));
+    buf->PrependChain(std::move(si));
+    _received = 0;
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
 
-      auto si = std::make_unique<StaticIOBuf>(
-          reinterpret_cast<const uint8_t *>(_stackIndex.data()),
-          (size_t)(_stackIndex.size() * sizeof(int)));
+  Gather("CoeffInitBootstrap");
 
-      // TODO: Try to move this functions to another file
-      buf->PrependChain(std::move(SerializeSlices()));
-      buf->PrependChain(std::move(SerializeReconstructed()));
-      buf->PrependChain(std::move(SerializeMask()));
-      buf->PrependChain(std::move(SerializeTransformations()));
-      buf->PrependChain(std::move(sf));
-      buf->PrependChain(std::move(si));
+  if (_debug) {
+    cout << "---------------------------------------" << endl;
+    cout << "               COEFFINIT               " << endl;
+    PrintImageSums();
+    cout << "---------------------------------------" << endl;
+  }
+}
 
-      _totalBytes += buf->ComputeChainDataLength();
+void irtkReconstruction::CoeffInit(struct coeffInitParameters parameters) {
+  for (int i = 0; i < (int) _numBackendNodes; i++) {
+    auto buf = MakeUniqueIOBuf((2 * sizeof(int)) + 
+        sizeof(struct coeffInitParameters));
+    auto dp = buf->GetMutDataPointer();
 
-      _received = 0;
-      SendMessage(_nids[i], std::move(buf));
-    }
-  } else {
+    dp.Get<int>() = COEFF_INIT; 
+    dp.Get<int>() = 0;
+    dp.Get<struct coeffInitParameters>() = parameters;
 
-  } 
+    buf->PrependChain(std::move(SerializeTransformations()));
+
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
 
   Gather("CoeffInit");
 
@@ -1410,6 +1424,23 @@ void irtkReconstruction::CoeffInit(int iteration) {
     PrintImageSums();
     cout << "---------------------------------------" << endl;
   }
+}
+
+void irtkReconstruction::CoeffInit(int iteration) {
+
+  _volcoeffs.clear();
+  _volcoeffs.resize(_slices.size());
+
+  _sliceInsideCPU.clear();
+  _sliceInsideCPU.resize(_slices.size());
+
+  auto parameters = createCoeffInitParameters();
+  bool initialize = iteration == 0;
+
+  if (initialize)
+    CoeffInitBootstrap(parameters);
+  else
+    CoeffInit(parameters);
 }
 
 void irtkReconstruction::ExcludeSlicesWithOverlap() {

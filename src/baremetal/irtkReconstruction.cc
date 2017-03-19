@@ -240,25 +240,45 @@ void irtkReconstruction::StoreParameters(
       _directions[i][j] = parameters.directions[i][j];
 }
 
-struct coeffInitParameters irtkReconstruction::StoreCoeffInitParameters(
+void irtkReconstruction::StoreCoeffInitParameters(
     ebbrt::IOBuf::DataPointer& dp) {
+  
+  auto parameters = dp.Get<struct coeffInitParameters>();
+  if (_debug)
+    printCoeffInitParameters(parameters);
+  
+  _delta = parameters.delta;
+  _lambda = parameters.lambda;
+  _qualityFactor = parameters.qualityFactor;
+  
+  auto nRigidTrans = dp.Get<int>();	
+  _transformations.resize(nRigidTrans);
+  for(int i = 0; i < nRigidTrans; i++) {
+    DeserializeTransformations(dp, _transformations[i]);
+  }
+}
+
+void irtkReconstruction::CoeffInitBootstrap(
+    ebbrt::IOBuf::DataPointer& dp) {
+
   auto parameters = dp.Get<struct coeffInitParameters>();
   auto reconstructionParameters = dp.Get<struct reconstructionParameters>();
 
   _debug = parameters.debug;
 
-  if (_debug)
+  if (_debug) {
     printCoeffInitParameters(parameters);
-  printReconstructionParameters(reconstructionParameters);
+    printReconstructionParameters(reconstructionParameters);
+  }
+
+  _delta = parameters.delta;
+  _lambda = parameters.lambda;
+  _qualityFactor = parameters.qualityFactor;
 
   StoreParameters(reconstructionParameters);
 
   int stackFactorSize = parameters.stackFactor;
   int stackIndexSize = parameters.stackIndex;
-  _delta = parameters.delta;
-  _lambda = parameters.lambda;
-  //_alpha = parameters.alpha;
-  _qualityFactor = parameters.qualityFactor;
 
   auto nSlices = dp.Get<int>();
   _slices.resize(nSlices);
@@ -271,9 +291,7 @@ struct coeffInitParameters irtkReconstruction::StoreCoeffInitParameters(
   DeserializeSlice(dp, _mask);
 
   auto nRigidTrans = dp.Get<int>();	
-
   _transformations.resize(nRigidTrans);
-
   for(int i = 0; i < nRigidTrans; i++) {
     DeserializeTransformations(dp, _transformations[i]);
   }
@@ -283,8 +301,6 @@ struct coeffInitParameters irtkReconstruction::StoreCoeffInitParameters(
 
   _stackIndex.resize(stackIndexSize);
   dp.Get(stackIndexSize*sizeof(int), (uint8_t*)_stackIndex.data());
-
-  return parameters;
 }
 
 void irtkReconstruction::InitializeEMValues() {
@@ -614,7 +630,13 @@ void irtkReconstruction::ParallelCoeffInit() {
 
 void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
 
-  auto parameters = StoreCoeffInitParameters(dp);
+  bool initialize = dp.Get<int>();
+
+  if (initialize)
+    CoeffInitBootstrap(dp);
+  else
+    StoreCoeffInitParameters(dp);
+  
 
   InitializeEM();
   InitializeEMValues();
