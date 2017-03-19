@@ -1220,8 +1220,12 @@ void irtkReconstruction::Execute() {
     if (lastIteration) {
       SetSmoothingParameters(_lastIterLambda);
     } else {
-      // TODO: fix for iterations greater than 1. For now just testing one
-      // iteration.
+      double lambda = _lambda;
+      for (int i = 0; i < _levels; i ++) {
+        if (it == _iterations * (_levels - i - 1) / _levels)
+          SetSmoothingParameters(lambda);
+        lambda *= 2;
+      }
     }
 
     // Use faster reconstruction during iterations and slower for 
