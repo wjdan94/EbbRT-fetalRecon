@@ -166,7 +166,6 @@ void irtkReconstruction::SetParameters(arguments args) {
 
 /*
  * Serialize
- *
  */
 
 std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeImageAttr(irtkRealImage ri) {
@@ -242,7 +241,7 @@ std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeImageW2I(irtkRealImage& ri) {
 }
 
 std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeSlices(irtkRealImage& ri) {
-  auto buf = MakeUniqueIOBuf(1 * sizeof(int));
+  auto buf = MakeUniqueIOBuf(sizeof(int));
   auto dp = buf->GetMutDataPointer();
   dp.Get<int>() = ri.GetSizeMat();
 
@@ -313,7 +312,7 @@ std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeRigidTrans(
 
 std::unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeSlices()
 {
-  auto buf = MakeUniqueIOBuf(1 * sizeof(int));
+  auto buf = MakeUniqueIOBuf(sizeof(int));
   auto dp = buf->GetMutDataPointer();
   dp.Get<int>() = _slices.size();
 
@@ -350,15 +349,51 @@ irtkReconstruction::SerializeReconstructed() {
 
 std::unique_ptr<ebbrt::MutUniqueIOBuf> 
 irtkReconstruction::SerializeTransformations() {
-  auto buf = MakeUniqueIOBuf(1 * sizeof(int));
+  auto buf = MakeUniqueIOBuf(sizeof(int));
   auto dp = buf->GetMutDataPointer();
   dp.Get<int>() = _transformations.size();
 
   for(int j = 0; j < _transformations.size(); j++) {
     buf->PrependChain(std::move(serializeRigidTrans(_transformations[j])));
   }
-
   return buf;
+}
+
+void irtkReconstruction::DeserializeTransformations(
+    ebbrt::IOBuf::DataPointer& dp, irtkRigidTransformation& tmp) {
+  auto tx = dp.Get<double>();
+  auto ty = dp.Get<double>();
+  auto tz = dp.Get<double>();
+
+  auto rx = dp.Get<double>();
+  auto ry = dp.Get<double>();
+  auto rz = dp.Get<double>();
+
+  auto cosrx = dp.Get<double>();
+  auto cosry = dp.Get<double>();
+  auto cosrz = dp.Get<double>();
+
+  auto sinx = dp.Get<double>();
+  auto siny = dp.Get<double>();
+  auto sinz = dp.Get<double>();
+
+  auto status0 = dp.Get<int>();
+  auto status1 = dp.Get<int>();
+  auto status2 = dp.Get<int>();
+  auto status3 = dp.Get<int>();
+  auto status4 = dp.Get<int>();
+  auto status5 = dp.Get<int>();
+
+  auto rows = dp.Get<int>();
+  auto cols = dp.Get<int>();
+  auto ptr = std::make_unique<double[]>(rows * cols);
+  dp.Get(rows * cols * sizeof(double), (uint8_t*)ptr.get());
+  irtkMatrix mat(rows, cols, std::move(ptr));
+
+  irtkRigidTransformation irt(tx, ty, tz, rx, ry, rz, cosrx, cosry,cosrz, sinx,
+      siny, sinz, status0, status1, status2, status3, status4, status5, mat);
+
+  tmp = std::move(irt);
 }
 
 /*
@@ -520,6 +555,18 @@ void irtkReconstruction::ReturnFromScaleVolume(
   auto parameters = dp.Get<struct scaleVolumeParameters>();
   _num += parameters.num;
   _den += parameters.den;
+  ReturnFrom();
+}
+
+void irtkReconstruction::ReturnFromSliceToVolumeRegistration(
+    ebbrt::IOBuf::DataPointer & dp) {
+  int start = dp.Get<int>();
+  int end = dp.Get<int>();
+
+  for(int i = start; i < end; i++) {
+    DeserializeTransformations(dp, _transformations[i]);
+  }
+
   ReturnFrom();
 }
 
@@ -894,33 +941,6 @@ void irtkReconstruction::StackRegistrations(
   InvertStackTransformations(stackTransformations);
 }
 
-// TODO: figure out if this is actually used
-/*
-   irtkRealImage irtkReconstruction::CreateAverage(
-   vector<irtkRealImage> &stacks,
-   vector<irtkRigidTransformation> &stack_transformations) {
-
-   if (!_templateCreated) {
-   cerr << "Please create the template before calculating the average of the "
-   "stacks."
-   << endl;
-   exit(1);
-   }
-
-   InvertStackTransformations(stackTransformations);
-   ParallelAverage parallelAverage(this, stacks, stackTransformations, -1, 0,
-   0, // [fetalRecontruction] target/source/background
-   true, _numThreads);
-   parallelAverage();
-   irtkRealImage average = parallelAverage.average;
-   irtkRealImage weights = parallelAverage.weights;
-   average /= weights;
-   InvertStackTransformations(stackTransformations);
-
-   return average;
-   }
-   */
-
 void irtkReconstruction::MatchStackIntensitiesWithMasking(
     vector<irtkRealImage> &stacks,
     vector<irtkRigidTransformation> &stack_transformations, double averageValue,
@@ -1212,7 +1232,7 @@ void irtkReconstruction::Execute() {
     if (it > 0) {
       //TODO: Figure out if the package-related functions are needed
       // or they can be discarded.
-      // SliceToVolumeRegistration();
+      SliceToVolumeRegistration();
     }
 
     auto lastIteration = it == (_iterations - 1);
@@ -1228,8 +1248,7 @@ void irtkReconstruction::Execute() {
       }
     }
 
-    // Use faster reconstruction during iterations and slower for 
-    // final reconstruction
+    // Use faster reconstruction for iterations, slower for final reconstruction
     _qualityFactor = lastIteration ? 2 : 1;
 
     InitializeEMValues();
@@ -1245,11 +1264,10 @@ void irtkReconstruction::Execute() {
     EStep();
     
     // Set number of reconstruction iterations
-    if (lastIteration) {
+    if (lastIteration) 
       recIterations = _recIterationsLast;
-    } else {
+    else
       recIterations = _recIterationsFirst;
-    }
 
     for (int recIt = 0; recIt < recIterations; recIt++) {
 
@@ -1610,6 +1628,32 @@ void irtkReconstruction::ScaleVolume() {
     cout << "              SCALE VOLUME             " << endl;
     PrintImageSums();
     cout << "scale: " << scale << endl;
+    cout << "---------------------------------------" << endl;
+  }
+}
+
+void irtkReconstruction::SliceToVolumeRegistration() {
+
+  for (int i = 0; i < (int) _nids.size(); i++) {
+    auto buf = MakeUniqueIOBuf(sizeof(int));
+    auto dp = buf->GetMutDataPointer();
+
+    dp.Get<int>() = SLICE_TO_VOLUME_REGISTRATION;
+
+    // TODO: there exist a SerializeReconstructed() function that
+    // can be used on this part. Why is it not being used?
+    buf->PrependChain(std::move(serializeSlices(_reconstructed)));
+
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
+
+  Gather("SliceToVolumeRegistration");
+
+  if (_debug) {
+    cout << "---------------------------------------" << endl;
+    cout << "         SLICE TO VOLUME REG           " << endl;
+    PrintImageSums();
     cout << "---------------------------------------" << endl;
   }
 }
@@ -2206,6 +2250,11 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
     case SCALE_VOLUME:
       {
         ReturnFromScaleVolume(dp);
+        break;
+      }
+    case SLICE_TO_VOLUME_REGISTRATION:
+      {
+        ReturnFromSliceToVolumeRegistration(dp);
         break;
       }
     default:

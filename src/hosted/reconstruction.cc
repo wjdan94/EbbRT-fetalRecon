@@ -383,7 +383,6 @@ void eraseInputStackTuner(vector<irtkRealImage> stacks,
 void AppMain() {
   int templateNumber = -1;
 
-  irtkRealImage average;
   irtkRealImage* mask;
 
   vector<irtkRealImage> stacks;
@@ -404,9 +403,9 @@ void AppMain() {
   reconstruction->SetParameters(ARGUMENTS);
 
   mask = getMask(reconstruction, stacks, stackTransformations, templateNumber);
+
   // Create template volume with isotropic resolution if resolution==0 
   // it will be determined from in-plane resolution of the image
-  
   ARGUMENTS.resolution =
     reconstruction->CreateTemplate(stacks[templateNumber], 
         ARGUMENTS.resolution);
@@ -417,13 +416,8 @@ void AppMain() {
   volumetricRegistration(reconstruction, 
       stacks, stackTransformations, templateNumber);
 
-  // TODO: find out if this need to be deleted.
-  //average = reconstruction->CreateAverage(stacks, stackTransformations);
-
   // Mask is transformed to the all other stacks and they are cropped
   applyMask(reconstruction, stacks, stackTransformations, templateNumber);
-
-  //reconstruction->PrintVectorSums(stacks, "after applyMask stacks");
 
   volumetricRegistration(reconstruction, 
       stacks, stackTransformations, templateNumber);
@@ -432,16 +426,9 @@ void AppMain() {
       stacks, stackTransformations, ARGUMENTS.averageValue, 
       !ARGUMENTS.intensityMatching);
 
-  // TODO: find out if this need to be deleted.
-  // average = reconstruction->CreateAverage(stacks, stackTransformations);
-
-  //reconstruction->PrintVectorSums(stacks, "after MatchStackIntensities stacks");
-
   // Create slices and slice-dependent transformations
   reconstruction->CreateSlicesAndTransformations(stacks, stackTransformations,
       ARGUMENTS.thickness);
-
-  //reconstruction->PrintVectorSums(stacks, "after CreateSlicesAndTransformations stacks");
 
   reconstruction->MaskSlices();
 
@@ -451,18 +438,12 @@ void AppMain() {
   // Initialize data structures for EM
   reconstruction->InitializeEM();
 
-  // For debugging
-  //reconstruction->PrintImageSums();
-  //reconstruction->PrintVectorSums(stacks, "Final stacks");
-  //reconstruction->PrintAttributeVectorSums();
-
   reconstruction->WaitPool().Then(
     [reconstruction](ebbrt::Future<void> f) {
       f.Get();
       // Spawn work to backends
       ebbrt::event_manager->Spawn([reconstruction]() {
         reconstruction->Execute();
-        //reconstruction->SendRecon(ARGUMENTS.iterations);
       });
   });
 

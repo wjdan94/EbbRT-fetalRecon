@@ -211,6 +211,15 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void ReturnFromScaleVolume(struct scaleVolumeParameters parameters,
         Messenger::NetworkId nid);
 
+
+    // SliceToVolumeRegistration functions
+    
+    void ParallelSliceToVolumeRegistration();
+    
+    void SliceToVolumeRegistration(ebbrt::IOBuf::DataPointer& dp);
+    
+    void ReturnFromSliceToVolumeRegistration(Messenger::NetworkId nid);
+    
     //
 
     void ReturnFrom(int fn, ebbrt::Messenger::NetworkId frontEndNid);
@@ -232,6 +241,13 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp);
 
     void DeserializeTransformations(ebbrt::IOBuf::DataPointer& dp, irtkRigidTransformation& tmp);
+
+    std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeTransformations();
+    
+    //
+    void ResetOrigin( irtkGreyImage &image, irtkRigidTransformation &transformation);
+
+    void ResetOrigin(irtkRealImage &image, irtkRigidTransformation &transformation);
 };
 
 inline double irtkReconstruction::SumImage(irtkRealImage img) {

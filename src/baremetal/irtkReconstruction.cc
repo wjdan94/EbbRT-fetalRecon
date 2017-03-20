@@ -1,5 +1,11 @@
 #include "irtkReconstruction.h"
 
+// Warning: The following three libraries must be imported toghether
+//          in this exact order.
+#include <irtkRegistration.h>
+#include <irtkImageRigidRegistration.h>
+#include <irtkImageRigidRegistrationWithPadding.h>
+
 #pragma GCC diagnostic ignored "-Wsign-compare"
 
 static size_t indexToCPU(size_t i) { return i; }
@@ -89,6 +95,59 @@ std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeSlices(irtkRealImage& ri) {
       (size_t)(ri.GetSizeMat() * sizeof(double)));
 
   buf->PrependChain(std::move(buf2));
+
+  return buf;
+}
+
+std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeRigidTrans(
+    irtkRigidTransformation& rt) {
+  auto buf = MakeUniqueIOBuf((12 * sizeof(double)) + (8 * sizeof(int)));
+  auto dp = buf->GetMutDataPointer();
+
+  dp.Get<double>() = rt._tx;
+  dp.Get<double>() = rt._ty;
+  dp.Get<double>() = rt._tz;
+
+  dp.Get<double>() = rt._rx;
+  dp.Get<double>() = rt._ry;
+  dp.Get<double>() = rt._rz;
+
+  dp.Get<double>() = rt._cosrx;
+  dp.Get<double>() = rt._cosry;
+  dp.Get<double>() = rt._cosrz;
+
+  dp.Get<double>() = rt._sinrx;
+  dp.Get<double>() = rt._sinry;
+  dp.Get<double>() = rt._sinrz;
+
+  dp.Get<int>() = (int)(rt._status[0]);
+  dp.Get<int>() = (int)(rt._status[1]);
+  dp.Get<int>() = (int)(rt._status[2]);
+  dp.Get<int>() = (int)(rt._status[3]);
+  dp.Get<int>() = (int)(rt._status[4]);
+  dp.Get<int>() = (int)(rt._status[5]);
+
+  dp.Get<int>() = rt._matrix.Rows();
+  dp.Get<int>() = rt._matrix.Cols();
+
+  auto buf2 = std::make_unique<StaticIOBuf>(
+      reinterpret_cast<const uint8_t *>(rt._matrix.GetMatrix()),
+      (size_t)(rt._matrix.Rows() * rt._matrix.Cols()  * sizeof(double)));
+
+  buf->PrependChain(std::move(buf2));
+
+  return buf;
+}
+
+std::unique_ptr<ebbrt::MutUniqueIOBuf> 
+irtkReconstruction::SerializeTransformations() {
+  auto buf = MakeUniqueIOBuf(1 * sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = _transformations.size();
+
+  for(int j = 0; j < _transformations.size(); j++) {
+    buf->PrependChain(std::move(serializeRigidTrans(_transformations[j])));
+  }
 
   return buf;
 }
@@ -189,6 +248,32 @@ void irtkReconstruction::DeserializeTransformations(
   tmp = std::move(irt);
 }
 /* End of Deserialize functions */
+
+void irtkReconstruction::ResetOrigin(
+    irtkGreyImage &image, irtkRigidTransformation &transformation) {
+  double ox, oy, oz;
+  image.GetOrigin(ox, oy, oz);
+  image.PutOrigin(0, 0, 0);
+  transformation.PutTranslationX(ox);
+  transformation.PutTranslationY(oy);
+  transformation.PutTranslationZ(oz);
+  transformation.PutRotationX(0);
+  transformation.PutRotationY(0);
+  transformation.PutRotationZ(0);
+}
+
+void irtkReconstruction::ResetOrigin(
+    irtkRealImage &image, irtkRigidTransformation &transformation) {
+  double ox, oy, oz;
+  image.GetOrigin(ox, oy, oz);
+  image.PutOrigin(0, 0, 0);
+  transformation.PutTranslationX(ox);
+  transformation.PutTranslationY(oy);
+  transformation.PutTranslationZ(oz);
+  transformation.PutRotationX(0);
+  transformation.PutRotationY(0);
+  transformation.PutRotationZ(0);
+}
 
 
 /*
@@ -1369,7 +1454,8 @@ void irtkReconstruction::RestoreSliceIntensities() {
   }
 }
 
-void irtkReconstruction::ReturnFromRestoreSliceIntensities(Messenger::NetworkId frontEndNid) {
+void irtkReconstruction::ReturnFromRestoreSliceIntensities(
+    Messenger::NetworkId frontEndNid) {
   ReturnFrom(RESTORE_SLICE_INTENSITIES, frontEndNid);
 }
 /* End of RestoreSliceIntensities*/
@@ -1405,8 +1491,8 @@ struct scaleVolumeParameters irtkReconstruction::ScaleVolume() {
   return parameters;
 }
 
-void irtkReconstruction::ReturnFromScaleVolume(struct scaleVolumeParameters parameters,
-    Messenger::NetworkId frontEndNid) {
+void irtkReconstruction::ReturnFromScaleVolume(
+    struct scaleVolumeParameters parameters, Messenger::NetworkId frontEndNid) {
   
   auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(scaleVolumeParameters));
   auto dp = buf->GetMutDataPointer();
@@ -1416,6 +1502,81 @@ void irtkReconstruction::ReturnFromScaleVolume(struct scaleVolumeParameters para
 
 }
 /* End of ScaleVolume */
+
+/*
+ * SliceToVolumeRegistration functions
+ */
+
+void irtkReconstruction::ParallelSliceToVolumeRegistration() {
+  irtkImageAttributes attr = _reconstructed.GetImageAttributes();
+  
+  for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
+    irtkImageRigidRegistrationWithPadding registration;
+    irtkGreyPixel smin, smax;
+    irtkGreyImage target;
+    irtkRealImage slice, w, b, t;
+    irtkResamplingWithPadding<irtkRealPixel> resampling(attr._dx, attr._dx,
+                                                        attr._dx, -1);
+
+    t = _slices[inputIndex];
+    resampling.SetInput(&_slices[inputIndex]);
+    resampling.SetOutput(&t);
+    resampling.Run();
+    target = t;
+    target.GetMinMax(&smin, &smax);
+
+    if (smax > -1) {
+      // [fetalRecontruction] put origin to zero
+      irtkRigidTransformation offset;
+      ResetOrigin(target, offset);
+      irtkMatrix mo = offset.GetMatrix();
+      irtkMatrix m = _transformations[inputIndex].GetMatrix();
+      m = m * mo;
+      _transformations[inputIndex].PutMatrix(m);
+
+      irtkGreyImage source = _reconstructed;
+      registration.SetInput(&target, &source);
+      registration.SetOutput(&_transformations[inputIndex]);
+      registration.GuessParameterSliceToVolume();
+      registration.SetTargetPadding(-1);
+      registration.Run();
+
+      // [fetalRecontruction] undo the offset
+      mo.Invert();
+      m = _transformations[inputIndex].GetMatrix();
+      m = m * mo;
+      _transformations[inputIndex].PutMatrix(m);
+    }
+  }
+
+}
+
+void irtkReconstruction::SliceToVolumeRegistration(
+    ebbrt::IOBuf::DataPointer& dp) {
+  
+  int reconSize = dp.Get<int>();
+  dp.Get(reconSize*sizeof(double), (uint8_t*)_reconstructed.GetMat());
+
+  ParallelSliceToVolumeRegistration();
+}
+
+
+
+void irtkReconstruction::ReturnFromSliceToVolumeRegistration(
+    Messenger::NetworkId frontEndNid) {
+  
+  auto buf = MakeUniqueIOBuf(3*sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = SLICE_TO_VOLUME_REGISTRATION;
+  dp.Get<int>() = _start;
+  dp.Get<int>() = _end;
+	
+
+  buf->PrependChain(std::move(SerializeTransformations()));
+
+  SendMessage(frontEndNid, std::move(buf));
+}
+/* End of SliceToVolumeRegistration */
 
 
 void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
@@ -1631,6 +1792,20 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         auto parameters = ScaleVolume();
         ReturnFromScaleVolume(parameters, nid);
 
+        if (_debug)
+          cout << "---------------------------------------" << endl;
+        break;
+      }
+    case SLICE_TO_VOLUME_REGISTRATION:
+      {
+        if (_debug) {
+          cout << "---------------------------------------" << endl;
+          cout << "     SLICE_TO_VOLUME_REGISTRATION      " << endl;
+        }
+
+        SliceToVolumeRegistration(dp);
+        ReturnFromSliceToVolumeRegistration(nid);
+       
         if (_debug)
           cout << "---------------------------------------" << endl;
         break;

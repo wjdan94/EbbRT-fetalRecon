@@ -331,6 +331,11 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
 
     void ReturnFromScaleVolume(ebbrt::IOBuf::DataPointer & dp);
 
+    //SliceToVolumeRegistration() function
+    void SliceToVolumeRegistration();
+
+    void ReturnFromSliceToVolumeRegistration(ebbrt::IOBuf::DataPointer & dp);
+
     // Start program execution
     void Execute();
 
@@ -357,6 +362,9 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeReconstructed();
 
     std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeTransformations();
+
+    void DeserializeTransformations(ebbrt::IOBuf::DataPointer& dp, 
+        irtkRigidTransformation& tmp);
 };
 
 inline double irtkReconstruction::SumImage(irtkRealImage img) {
