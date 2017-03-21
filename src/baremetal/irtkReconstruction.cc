@@ -1,10 +1,27 @@
 #include "irtkReconstruction.h"
-
-// Warning: The following three libraries must be imported toghether
-//          in this exact order.
+#include <irtkResampling.h>
 #include <irtkRegistration.h>
 #include <irtkImageRigidRegistration.h>
 #include <irtkImageRigidRegistrationWithPadding.h>
+#include <irtkImageFunction.h>
+#include <irtkTransformation.h>
+//#include <irtkMeanShift.h>
+//#include <irtkCRF.h>
+#include <math.h>
+#include <stdlib.h>
+
+#ifdef BUILD_CPU_ONLY
+#include "utils.h"
+#endif
+
+
+#include <boost/filesystem.hpp>
+using namespace boost::filesystem;
+
+#if HAVE_CULA
+#include <cula.h>
+#endif
+
 
 #pragma GCC diagnostic ignored "-Wsign-compare"
 
@@ -336,11 +353,14 @@ void irtkReconstruction::StoreCoeffInitParameters(
   _lambda = parameters.lambda;
   _qualityFactor = parameters.qualityFactor;
   
+  /*
   auto nRigidTrans = dp.Get<int>();	
   _transformations.resize(nRigidTrans);
   for(int i = 0; i < nRigidTrans; i++) {
     DeserializeTransformations(dp, _transformations[i]);
   }
+  */
+  //DeserializeSlice(dp, _reconstructed);
 }
 
 void irtkReconstruction::CoeffInitBootstrap(
@@ -386,6 +406,10 @@ void irtkReconstruction::CoeffInitBootstrap(
 
   _stackIndex.resize(stackIndexSize);
   dp.Get(stackIndexSize*sizeof(int), (uint8_t*)_stackIndex.data());
+  
+  InitializeEM();
+  
+  _voxelNum.resize(_slices.size());
 }
 
 void irtkReconstruction::InitializeEMValues() {
@@ -450,7 +474,17 @@ void irtkReconstruction::InitializeEM() {
 }
 
 void irtkReconstruction::ParallelCoeffInit() {
-  for (size_t index = _start; (int) index != _end; ++index) {
+  cout << "Before CoeffInit" << endl;
+  PrintImageSums();
+
+  /*
+   for (int i = 0; i < _slices.size(); i++) {
+    cout << "Transformations: " << i << endl;
+    _transformations[i].Print2(); 
+  }
+  */
+
+  for (size_t index = _start; (int) index < _end; ++index) {
 
     bool sliceInside;
 
@@ -488,6 +522,9 @@ void irtkReconstruction::ParallelCoeffInit() {
     //isotropic voxel size of PSF - derived from resolution of 
     //reconstructed volume
     double size = res / _qualityFactor;
+
+    cout << "size[" << index << "]: " << size << " res: " << res 
+      << " _qualityFactor" << _qualityFactor << endl; 
 
     //number of voxels in each direction
     //the ROI is 2*voxel dimension
@@ -538,7 +575,7 @@ void irtkReconstruction::ParallelCoeffInit() {
     //reconstructed volume maximum dim of rotated kernel - the next higher odd
     //integer plus two to accound for rounding error of tx,ty,tz.  Note
     //conversion from PSF image coordinates to tPSF image coordinates *size/res
-    
+
     int dim = (floor(ceil(sqrt(double(xDim * xDim + yDim * yDim + zDim * zDim)) 
             * size / res) / 2)) * 2 + 1 + 2;
     //prepare image attributes. Voxel dimension will be taken from the
@@ -620,6 +657,7 @@ void irtkReconstruction::ParallelCoeffInit() {
 
                 //x+=(vx-cx); y+=(vy-cy); z+=(vz-cz);
                 //Transform to space of reconstructed volume
+
                 _transformations[index].Transform(x, y, z);
                 //Change to image coordinates
                 _reconstructed.WorldToImage(x, y, z);
@@ -695,6 +733,7 @@ void irtkReconstruction::ParallelCoeffInit() {
                           }
               } 
 
+
           //store tPSF values
           for (ii = 0; ii < dim; ii++)
             for (jj = 0; jj < dim; jj++)
@@ -722,8 +761,6 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
   else
     StoreCoeffInitParameters(dp);
   
-
-  InitializeEM();
   InitializeEMValues();
 
   _volcoeffs.clear();
@@ -741,6 +778,7 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
   int start = _start + (0 * factor);
   int end = _start + (0 * factor) + factor;
   end = (end > diff) ? _end : end;
+
   ParallelCoeffInit();
 
   _volumeWeights.Initialize(_reconstructed.GetImageAttributes());
@@ -789,8 +827,12 @@ void irtkReconstruction::GaussianReconstruction() {
   int sliceVoxNum;
 
   //clear _reconstructed image
-  _voxelNum.resize(_slices.size());
+  //_voxelNum.resize(_slices.size());
   _reconstructed = 0;
+
+  //cout << "Entering ..." << endl;
+  //PrintAttributeVectorSums();
+  //PrintVector(_scaleCPU, "_scaleCPU");
 
   for (inputIndex = _start; inputIndex < _end; ++inputIndex) {
     slice = _slices[inputIndex];
@@ -825,6 +867,7 @@ void irtkReconstruction::GaussianReconstruction() {
     }
 
     _voxelNum[inputIndex] = sliceVoxNum;
+    //cout << "_voxelNum[" << inputIndex << "]: " << sliceVoxNum << endl;
   }
 }
 
@@ -906,7 +949,6 @@ void irtkReconstruction::ParallelSimulateSlices() {
 void irtkReconstruction::SimulateSlices(ebbrt::IOBuf::DataPointer& dp) {
 
   int initialize = dp.Get<int>();
-  cout << "Initialize: " << initialize << endl;
 
   if (initialize) {
     _simulatedSlices.clear();
@@ -1509,6 +1551,11 @@ void irtkReconstruction::ReturnFromScaleVolume(
 
 void irtkReconstruction::ParallelSliceToVolumeRegistration() {
   irtkImageAttributes attr = _reconstructed.GetImageAttributes();
+
+  cout << "ParallelSliceToVolumeRegistration " << endl;
+  cout << "Attributes " << endl;
+  attr.Print();
+  cout << "End Attributes" <<endl;
   
   for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
     irtkImageRigidRegistrationWithPadding registration;
@@ -1535,17 +1582,44 @@ void irtkReconstruction::ParallelSliceToVolumeRegistration() {
       _transformations[inputIndex].PutMatrix(m);
 
       irtkGreyImage source = _reconstructed;
+
+      //cout << fixed << "source[" << inputIndex << ":] " << SumImage(source) << endl; 
+
       registration.SetInput(&target, &source);
+      
+      //cout << fixed << "target[" << inputIndex << ":] " << SumImage(target) << endl; 
+      
       registration.SetOutput(&_transformations[inputIndex]);
+      
+      //cout << "Transformation: " << inputIndex << endl;
+      //_transformations[inputIndex].Print2();
+
       registration.GuessParameterSliceToVolume();
       registration.SetTargetPadding(-1);
       registration.Run();
+      
+      cout << "Transformation: " << inputIndex << endl;
+      _transformations[inputIndex].Print2();
 
       // [fetalRecontruction] undo the offset
       mo.Invert();
       m = _transformations[inputIndex].GetMatrix();
+      
+      //cout << "m: " << inputIndex << endl;
+      //m.Print();
+      
       m = m * mo;
+      
+      //cout << "m: " << inputIndex << endl;
+      //m.Print();
+      
+
       _transformations[inputIndex].PutMatrix(m);
+      
+      //cout << "Transformation: " << inputIndex << endl;
+      //_transformations[inputIndex].GetMatrix().Print();
+      //cout << "mo: " << inputIndex << endl;
+      //mo.Print();
     }
   }
 
@@ -1557,7 +1631,25 @@ void irtkReconstruction::SliceToVolumeRegistration(
   int reconSize = dp.Get<int>();
   dp.Get(reconSize*sizeof(double), (uint8_t*)_reconstructed.GetMat());
 
+  /*
+  cout << "Before ParallelSliceToVolumeRegistration" << endl;
+  for (int i = 0; i < _slices.size(); i++) {
+    cout << "Transformations: " << i << endl;
+    _transformations[i].Print2(); 
+  }
+  */
+
   ParallelSliceToVolumeRegistration();
+  
+  /*
+  cout << "After ParallelSliceToVolumeRegistration" << endl;
+
+  for (int i = 0; i < _slices.size(); i++) {
+    cout << "Transformations: " << i << endl;
+    _transformations[i].Print2(); 
+  }
+  */
+
 }
 
 
@@ -1604,6 +1696,7 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         ReturnFrom(COEFF_INIT,nid);
 
         if (_debug) {
+          cout << "_averageVolumeWeight: " << _averageVolumeWeight << endl;
           PrintImageSums();
           cout << "---------------------------------------" << endl;
         }

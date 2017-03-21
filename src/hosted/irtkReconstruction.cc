@@ -1321,9 +1321,9 @@ void irtkReconstruction::Execute() {
     // TODO: implement Evaluate()
   }
 
-  RestoreSliceIntensities();
+  //RestoreSliceIntensities();
 
-  ScaleVolume();
+  //ScaleVolume();
 }
 
 struct coeffInitParameters irtkReconstruction::createCoeffInitParameters() {
@@ -1428,7 +1428,8 @@ void irtkReconstruction::CoeffInit(struct coeffInitParameters parameters) {
     dp.Get<int>() = 0;
     dp.Get<struct coeffInitParameters>() = parameters;
 
-    buf->PrependChain(std::move(SerializeTransformations()));
+    //buf->PrependChain(std::move(SerializeReconstructed()));
+    //buf->PrependChain(std::move(SerializeTransformations()));
 
     _totalBytes += buf->ComputeChainDataLength();
     SendMessage(_nids[i], std::move(buf));
@@ -1445,12 +1446,6 @@ void irtkReconstruction::CoeffInit(struct coeffInitParameters parameters) {
 }
 
 void irtkReconstruction::CoeffInit(int iteration) {
-
-  _volcoeffs.clear();
-  _volcoeffs.resize(_slices.size());
-
-  _sliceInsideCPU.clear();
-  _sliceInsideCPU.resize(_slices.size());
 
   auto parameters = createCoeffInitParameters();
   bool initialize = iteration == 0;
@@ -2180,6 +2175,11 @@ void irtkReconstruction::SetSmoothingParameters(double lambda) {
   _lambda = lambda * _delta * _delta;
   _alpha = 0.05 / lambda;
   _alpha = (_alpha > 1) ? 1 : _alpha;
+  cout << "SetSmoothingParameters() " << endl;
+  cout << "lambda = " << lambda << endl;
+  cout << "_delta = " << _delta << endl;
+  cout << "_lambda = " << _lambda << endl;
+  cout << "_alpha = " << _alpha << endl;
 }
 
 /*
