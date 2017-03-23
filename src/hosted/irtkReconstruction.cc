@@ -143,10 +143,11 @@ void irtkReconstruction::SetParameters(arguments args) {
   _T1PackageSize = args.T1PackageSize; // Not used
   _numDevicesToUse = args.numDevicesToUse; // Not used
 
-  _sigma = args.sigma; 
+  _sigma = (args.sigma) > 0 ? args.sigma : 20;
   _resolution = args.resolution; // Not used
   _averageValue = args.averageValue; // Not used
   _delta = args.delta; 
+  _smoothingLambda = args.lambda;
   _lambda = args.lambda; 
   _alpha = (0.05 / _lambda) * _delta * _delta;
   _lastIterLambda = args.lastIterLambda; // Not used
@@ -1240,7 +1241,7 @@ void irtkReconstruction::Execute() {
     if (lastIteration) {
       SetSmoothingParameters(_lastIterLambda);
     } else {
-      double lambda = _lambda;
+      double lambda = _smoothingLambda;
       for (int i = 0; i < _levels; i ++) {
         if (it == _iterations * (_levels - i - 1) / _levels)
           SetSmoothingParameters(lambda);
@@ -1281,8 +1282,6 @@ void irtkReconstruction::Execute() {
       if (_intensityMatching) {
         if (!_disableBiasCorr) {
           //TODO: implement Bias() function
-          //TODO: figure out what happens with sigma. In the original
-          // the value at this point is 12, but here is 20.
           //if (_sigma > 0) 
             //Bias();
         }
@@ -1294,8 +1293,6 @@ void irtkReconstruction::Execute() {
       if (_intensityMatching) {
         if (!_disableBiasCorr) {
           //TODO: implement NormalizeBias() function
-          //TODO: figure out what happens with sigma. In the original
-          // the value at this point is 12, but here is 20.
           //if (_sigma > 0 && !_globalBiasCorrection) 
             //NormalizeBias(it);
         }
@@ -1730,11 +1727,20 @@ void irtkReconstruction::InitializeRobustStatistics() {
   Gather("InitializeRobustStatistics");
 
   _sigmaCPU = _sigmaSum / _numSum;
+  _sigmaSCPU = 0.025;
+  _mixCPU = 0.9;
+  _mixSCPU = 0.9;
   _mCPU = 1 / (2.1 * _maxIntensity - 1.9 * _minIntensity);
 
   if (_debug) {
     PrintImageSums("[InitializeRobustStatistics output]");
-    cout << "[InitializeRobustStatistics output] _sigmaCPU: " << _sigmaCPU << endl;
+    cout << "[InitializeRobustStatistics output] _sigmaCPU: " 
+      << _sigmaCPU << endl;
+    cout << "[InitializeRobustStatistics output] _sigmaSCPU: " 
+      << _sigmaSCPU << endl;
+    cout << "[InitializeRobustStatistics output] _mixCPU: " << _mixCPU << endl;
+    cout << "[InitializeRobustStatistics output] _mixSCPU: " 
+      << _mixSCPU << endl;
     cout << "[InitializeRobustStatistics output] _mCPU: " << _mCPU << endl;
   }
 }
@@ -1886,17 +1892,14 @@ void irtkReconstruction::EStepIII() {
 
   Gather("EStepIII");
 
-  if (_debug) {
-    cout << "[EStepIII output] _sum: " << _sum << endl;
-    cout << "[EStepIII output] _num: " << (int) _num << endl;
-  }
-
   if (_num > 0)
     _mixSCPU = _sum / _num;
   else
     _mixSCPU = 0.9;
 
   if (_debug) {
+    cout << "[EStepIII output] _sum: " << _sum << endl;
+    cout << "[EStepIII output] _num: " << (int) _num << endl;
     cout << "[EStepIII output] _mixSCPU: " << _mixSCPU << endl;
   }
 }
@@ -2219,11 +2222,6 @@ void irtkReconstruction::SetSmoothingParameters(double lambda) {
   _lambda = lambda * _delta * _delta;
   _alpha = 0.05 / lambda;
   _alpha = (_alpha > 1) ? 1 : _alpha;
-  cout << "SetSmoothingParameters() " << endl;
-  cout << "lambda = " << lambda << endl;
-  cout << "_delta = " << _delta << endl;
-  cout << "_lambda = " << _lambda << endl;
-  cout << "_alpha = " << _alpha << endl;
 }
 
 /*

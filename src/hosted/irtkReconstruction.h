@@ -63,6 +63,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     double _averageValue; // Not used
     double _delta; 
     double _lambda; 
+    double _smoothingLambda; 
     double _lastIterLambda; // Not used
     double _smoothMask; // Not used
     double _lowIntensityCutoff; // Not used

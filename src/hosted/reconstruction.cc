@@ -44,7 +44,7 @@ void parseInputParameters(int argc, char **argv) {
         po::value<int>(&ARGUMENTS.iterations)->default_value(1),
         "Number of registration-reconstruction iterations.")
       ("sigma", 
-        po::value<double>(&ARGUMENTS.sigma)->default_value(20),
+        po::value<double>(&ARGUMENTS.sigma)->default_value(12),
         "Stdev for bias field. [Default: 12mm]")
       ("resolution", 
         po::value<double>(&ARGUMENTS.resolution)->default_value(0.75),

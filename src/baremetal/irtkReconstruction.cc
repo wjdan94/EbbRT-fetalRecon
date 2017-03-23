@@ -307,17 +307,17 @@ void printCoeffInitParameters(struct coeffInitParameters parameters) {
 }
 
 void printReconstructionParameters(struct reconstructionParameters parameters) {
-  cout << "CoeffInit input] Global Bias Correction: " << parameters.globalBiasCorrection << endl;
-  cout << "CoeffInit input] start: " << parameters.start << endl;
-  cout << "CoeffInit input] end: " << parameters.end << endl;
-  cout << "CoeffInit input] Adaptive: " << parameters.adaptive << endl;
-  cout << "CoeffInit input] Sigma Bias: " << parameters.sigmaBias << endl;
-  cout << "CoeffInit input] Step: " << parameters.step << endl;
-  cout << "CoeffInit input] Sigma SCPU: " << parameters.sigmaSCPU << endl;
-  cout << "CoeffInit input] Sigma S2CPU: " << parameters.sigmaS2CPU << endl;
-  cout << "CoeffInit input] Mix SCPU: " << parameters.mixSCPU << endl;
-  cout << "CoeffInit input] Mix CPU: " << parameters.mixCPU << endl;
-  cout << "CoeffInit input] Low Intensity Cutoff" << parameters.lowIntensityCutoff << endl;
+  cout << "[CoeffInit input] Global Bias Correction: " << parameters.globalBiasCorrection << endl;
+  cout << "[CoeffInit input] start: " << parameters.start << endl;
+  cout << "[CoeffInit input] end: " << parameters.end << endl;
+  cout << "[CoeffInit input] Adaptive: " << parameters.adaptive << endl;
+  cout << "[CoeffInit input] Sigma Bias: " << parameters.sigmaBias << endl;
+  cout << "[CoeffInit input] Step: " << parameters.step << endl;
+  cout << "[CoeffInit input] Sigma SCPU: " << parameters.sigmaSCPU << endl;
+  cout << "[CoeffInit input] Sigma S2CPU: " << parameters.sigmaS2CPU << endl;
+  cout << "[CoeffInit input] Mix SCPU: " << parameters.mixSCPU << endl;
+  cout << "[CoeffInit input] Mix CPU: " << parameters.mixCPU << endl;
+  cout << "[CoeffInit input] Low Intensity Cutoff" << parameters.lowIntensityCutoff << endl;
 }
 
 void irtkReconstruction::StoreParameters(
@@ -1188,6 +1188,14 @@ struct eStepReturnParameters irtkReconstruction::EStepIII(
   double den = parameters.den;
   double mixSCPU = parameters.mixSCPU;
 
+  cout << "[EStepIII input] _meanSCPU: " << meanSCPU << endl; 
+  cout << "[EStepIII input] _meanS2CPU: " << meanS2CPU << endl; 
+  cout << "[EStepIII input] _mixSCPU: " << mixSCPU << endl; 
+  cout << "[EStepIII input] _sigmaSCPU: " << sigmaSCPU << endl; 
+  cout << "[EStepIII input] _sigmaS2CPU: " << sigmaS2CPU << endl; 
+  cout << "[EStepIII input] _den: " << den << endl; 
+  PrintImageSums("[EStepIII input]");
+
   struct eStepReturnParameters returnParameters;
   returnParameters.sum = 0;
   returnParameters.num = 0;
@@ -1550,10 +1558,7 @@ void irtkReconstruction::ReturnFromScaleVolume(
 void irtkReconstruction::ParallelSliceToVolumeRegistration() {
   irtkImageAttributes attr = _reconstructed.GetImageAttributes();
 
-  cout << "ParallelSliceToVolumeRegistration " << endl;
-  cout << "Attributes " << endl;
-  attr.Print();
-  cout << "End Attributes" <<endl;
+  //attr.Print2("[ParallelSliceToVolumeRegistration input] attributes: ");
   
   for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
     irtkImageRigidRegistrationWithPadding registration;
@@ -1579,46 +1584,48 @@ void irtkReconstruction::ParallelSliceToVolumeRegistration() {
       m = m * mo;
       _transformations[inputIndex].PutMatrix(m);
 
+
+      //cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex << " smin: " << smin << endl; 
+      //cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex << " smax: " << smax << endl; 
+      //cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex << " target: " << SumImage(target) << endl; 
+      
+      //cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex << " offset: ";
+      //offset.Print2();
+      //cout << endl; 
+
+
       irtkGreyImage source = _reconstructed;
-
-      //cout << fixed << "source[" << inputIndex << ":] " << SumImage(source) << endl; 
-
       registration.SetInput(&target, &source);
       
-      //cout << fixed << "target[" << inputIndex << ":] " << SumImage(target) << endl; 
       
       registration.SetOutput(&_transformations[inputIndex]);
-      
-      //cout << "Transformation: " << inputIndex << endl;
-      //_transformations[inputIndex].Print2();
-
       registration.GuessParameterSliceToVolume();
       registration.SetTargetPadding(-1);
-      cout << "Transformation: " << inputIndex << endl;
+      
+      cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex << " transformation: ";
       _transformations[inputIndex].Print2();
+      cout << endl; 
+
       registration.Run();
-      cout << "Transformation: " << inputIndex << endl;
+      
+      cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex << " transformation: ";
       _transformations[inputIndex].Print2();
+      cout << endl;
+      
+      
+      //cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex << " target: " << SumImage(target) << endl; 
+      
+      //cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex << " offset: ";
+      //offset.Print2();
+      //cout << endl; 
+      
 
       // [fetalRecontruction] undo the offset
       mo.Invert();
       m = _transformations[inputIndex].GetMatrix();
-      
-      //cout << "m: " << inputIndex << endl;
-      //m.Print();
-      
       m = m * mo;
-      
-      //cout << "m: " << inputIndex << endl;
-      //m.Print();
-      
-
       _transformations[inputIndex].PutMatrix(m);
       
-      //cout << "Transformation: " << inputIndex << endl;
-      //_transformations[inputIndex].GetMatrix().Print();
-      //cout << "mo: " << inputIndex << endl;
-      //mo.Print();
     }
   }
 
