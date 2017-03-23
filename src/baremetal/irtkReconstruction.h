@@ -227,7 +227,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     // Debugging functions
     inline double SumImage(irtkRealImage img);
 
-    inline void PrintImageSums();
+    inline void PrintImageSums(string s);
 
     inline void PrintVectorSums(vector<irtkRealImage> images, string name);
     
@@ -261,16 +261,16 @@ inline double irtkReconstruction::SumImage(irtkRealImage img) {
   return (double)sum;
 }
 
-inline void irtkReconstruction::PrintImageSums() {
+inline void irtkReconstruction::PrintImageSums(string s) {
   /*
      cout << "_externalRegistrationTargetImage: " 
      << SumImage(_externalRegistrationTargetImage) << endl; 
      */
 
-  cout << fixed << "_reconstructed: " 
+  cout << fixed << s <<  " _reconstructed: " 
     << SumImage(_reconstructed) << endl;
 
-  cout << fixed << "_mask: "
+  cout << fixed << s << " _mask: "
     << SumImage(_mask) << endl;
 }
 

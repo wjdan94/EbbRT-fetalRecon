@@ -1225,7 +1225,7 @@ void irtkReconstruction::Execute() {
   int recIterations;
   for (int it = 0; it < _iterations; it++) {
     if (_debug)
-      cout << "Iteration " << it << endl;
+      cout << "[Iteration " << it << "] " << endl;
 
     // TODO: fix for iterations greater than 1. For now just testing one
     // iteration.
@@ -1272,14 +1272,12 @@ void irtkReconstruction::Execute() {
     for (int recIt = 0; recIt < recIterations; recIt++) {
 
       if (_debug)
-        cout << "Reconstruction iteration " << recIt << endl;
+        cout << "[Reconstruction iteration " << recIt << "]" << endl;
 
-      cout << "---------------------------------------" << endl;
-      cout << "            Bias Correction            " << endl;
-      cout << "_intensityMatching: " << _intensityMatching << endl;
-      cout << "_disableBiasCorr: " << _disableBiasCorr << endl;
-      cout << "_sigma: " << _sigma << endl;
-      cout << "---------------------------------------" << endl;
+      cout << "[Bias input] _intensityMatching: " << _intensityMatching << endl;
+      cout << "[Bias input] _disableBiasCorr: " << _disableBiasCorr << endl;
+      cout << "[Bias input] _sigma: " << _sigma << endl;
+
       if (_intensityMatching) {
         if (!_disableBiasCorr) {
           //TODO: implement Bias() function
@@ -1308,22 +1306,29 @@ void irtkReconstruction::Execute() {
       MStep(recIt + 1);
 
       EStep();
+    
     }
-
+    if (_debug) {
+      cout << endl;
+      PrintImageSums("[End of inner loop]");
+    }
+    
     MaskVolume();
 
     if (_debug) {
-      cout << endl;
-      cout << "End of reconstruction iterations" << endl;
-      PrintImageSums();
-      cout << endl;
+      PrintImageSums("[MaskVolume output]");
     }
     // TODO: implement Evaluate()
   }
 
-  //RestoreSliceIntensities();
+  RestoreSliceIntensities();
 
-  //ScaleVolume();
+  ScaleVolume();
+    
+  if (_debug) {
+    cout << endl;
+    PrintImageSums("[End of outer loop]");
+  }
 }
 
 struct coeffInitParameters irtkReconstruction::createCoeffInitParameters() {
@@ -1375,7 +1380,6 @@ void irtkReconstruction::CoeffInitBootstrap(
     end = i * factor + factor;
     end = (end > diff) ? diff : end;
 
-    cout << "Start: " << start << " End: " << end << endl;
     auto buf = MakeUniqueIOBuf((2 * sizeof(int)) + 
         sizeof(struct coeffInitParameters) +
         sizeof(struct reconstructionParameters));
@@ -1411,10 +1415,7 @@ void irtkReconstruction::CoeffInitBootstrap(
   Gather("CoeffInitBootstrap");
 
   if (_debug) {
-    cout << "---------------------------------------" << endl;
-    cout << "               COEFFINIT               " << endl;
-    PrintImageSums();
-    cout << "---------------------------------------" << endl;
+    PrintImageSums("[CoeffInit output]");
   }
 }
 
@@ -1428,8 +1429,8 @@ void irtkReconstruction::CoeffInit(struct coeffInitParameters parameters) {
     dp.Get<int>() = 0;
     dp.Get<struct coeffInitParameters>() = parameters;
 
-    //buf->PrependChain(std::move(SerializeReconstructed()));
     //buf->PrependChain(std::move(SerializeTransformations()));
+    //buf->PrependChain(std::move(SerializeReconstructed()));
 
     _totalBytes += buf->ComputeChainDataLength();
     SendMessage(_nids[i], std::move(buf));
@@ -1438,10 +1439,7 @@ void irtkReconstruction::CoeffInit(struct coeffInitParameters parameters) {
   Gather("CoeffInit");
 
   if (_debug) {
-    cout << "---------------------------------------" << endl;
-    cout << "               COEFFINIT               " << endl;
-    PrintImageSums();
-    cout << "---------------------------------------" << endl;
+    PrintImageSums("[CoeffInit output]");
   }
 }
 
@@ -1496,11 +1494,9 @@ void irtkReconstruction::GaussianReconstruction() {
   ExcludeSlicesWithOverlap();
 
   if (_debug) {
-    cout << "---------------------------------------" << endl;
-    cout << "       GAUSSIAN RECONSTRUCTION         " << endl;
-    PrintImageSums();
-    cout << "_volumeWeights: " << SumImage(_volumeWeights) << endl;
-    cout << "---------------------------------------" << endl;
+    PrintImageSums("[GaussianReconstruction output]");
+    cout << fixed << "[GaussianReconstruction output] _volumeWeights: " 
+      << SumImage(_volumeWeights) << endl;
   }
 }
 
@@ -1520,10 +1516,7 @@ void irtkReconstruction::SimulateSlices(bool initialize) {
   Gather("SimulateSlices");
 
   if (_debug) {
-    cout << "---------------------------------------" << endl;
-    cout << "           SIMULATE SLICES             " << endl;
-    PrintImageSums();
-    cout << "---------------------------------------" << endl;
+    PrintImageSums("[SimulateSlices output]");
   }
 }
 
@@ -1565,17 +1558,14 @@ void irtkReconstruction::MStep(int iteration) {
   _mCPU = 1 / (_mMax - _mMin);
 
   if (_debug) {
-    cout << "---------------------------------------" << endl;
-    cout << "                 MSTEP                 " << endl;
     //cout << "_mSigma: " << _mSigma << endl;
     //cout << "_mMix: " << _mMix << endl;
     //cout << "_mNum: " << _mNum << endl;
     //cout << "_mMin: " << _mMin << endl;
     //cout << "_mMax: " << _mMax << endl;
-    cout << "_sigmaCPU: " << _sigmaCPU << endl;
-    cout << "_mixCPU: " << _mixCPU << endl;
-    cout << "_mCPU: " << _mCPU << endl;
-    cout << "---------------------------------------" << endl;
+    cout << "[MStep output] _sigmaCPU: " << _sigmaCPU << endl;
+    cout << "[MStep output] _mixCPU: " << _mixCPU << endl;
+    cout << "[MStep output] _mCPU: " << _mCPU << endl;
   }
 }
 
@@ -1619,17 +1609,85 @@ void irtkReconstruction::ScaleVolume() {
   }
 
   if (_debug) {
-    cout << "---------------------------------------" << endl;
-    cout << "              SCALE VOLUME             " << endl;
-    PrintImageSums();
-    cout << "scale: " << scale << endl;
-    cout << "---------------------------------------" << endl;
+    PrintImageSums("[ScaleVolume output]");
   }
+}
+
+void irtkReconstruction::ParallelSliceToVolumeRegistration() {
+  irtkImageAttributes attr = _reconstructed.GetImageAttributes();
+
+  for (int inputIndex = 0; inputIndex < _slices.size(); inputIndex++) {
+    irtkImageRigidRegistrationWithPadding registration;
+    irtkGreyPixel smin, smax;
+    irtkGreyImage target;
+    irtkRealImage slice, w, b, t;
+    irtkResamplingWithPadding<irtkRealPixel> resampling(attr._dx, attr._dx,
+                                                        attr._dx, -1);
+
+    t = _slices[inputIndex];
+    resampling.SetInput(&_slices[inputIndex]);
+    resampling.SetOutput(&t);
+    resampling.Run();
+    target = t;
+    target.GetMinMax(&smin, &smax);
+
+    if (smax > -1) {
+      // [fetalRecontruction] put origin to zero
+      irtkRigidTransformation offset;
+      ResetOrigin(target, offset);
+      irtkMatrix mo = offset.GetMatrix();
+      irtkMatrix m = _transformations[inputIndex].GetMatrix();
+      m = m * mo;
+      _transformations[inputIndex].PutMatrix(m);
+
+      irtkGreyImage source = _reconstructed;
+
+      //cout << fixed << "source[" << inputIndex << ":] " << SumImage(source) << endl; 
+
+      registration.SetInput(&target, &source);
+      
+      //cout << fixed << "target[" << inputIndex << ":] " << SumImage(target) << endl; 
+      
+      registration.SetOutput(&_transformations[inputIndex]);
+      
+      //cout << "Transformation: " << inputIndex << endl;
+      //_transformations[inputIndex].Print2();
+
+      registration.GuessParameterSliceToVolume();
+      registration.SetTargetPadding(-1);
+      cout << "Transformation: " << inputIndex << endl;
+      _transformations[inputIndex].Print2();
+      registration.Run();
+      cout << "Transformation: " << inputIndex << endl;
+      _transformations[inputIndex].Print2();
+
+      // [fetalRecontruction] undo the offset
+      mo.Invert();
+      m = _transformations[inputIndex].GetMatrix();
+      
+      //cout << "m: " << inputIndex << endl;
+      //m.Print();
+      
+      m = m * mo;
+      
+      //cout << "m: " << inputIndex << endl;
+      //m.Print();
+      
+
+      _transformations[inputIndex].PutMatrix(m);
+      
+      //cout << "Transformation: " << inputIndex << endl;
+      //_transformations[inputIndex].GetMatrix().Print();
+      //cout << "mo: " << inputIndex << endl;
+      //mo.Print();
+    }
+  }
+
 }
 
 void irtkReconstruction::SliceToVolumeRegistration() {
 
-  for (int i = 0; i < (int) _nids.size(); i++) {
+   for (int i = 0; i < (int) _nids.size(); i++) {
     auto buf = MakeUniqueIOBuf(sizeof(int));
     auto dp = buf->GetMutDataPointer();
 
@@ -1645,11 +1703,12 @@ void irtkReconstruction::SliceToVolumeRegistration() {
 
   Gather("SliceToVolumeRegistration");
 
+  //
+  //ParallelSliceToVolumeRegistration();
+  
+
   if (_debug) {
-    cout << "---------------------------------------" << endl;
-    cout << "         SLICE TO VOLUME REG           " << endl;
-    PrintImageSums();
-    cout << "---------------------------------------" << endl;
+    PrintImageSums("[SliceToVolumeRegistration output]");
   }
 }
 
@@ -1674,12 +1733,9 @@ void irtkReconstruction::InitializeRobustStatistics() {
   _mCPU = 1 / (2.1 * _maxIntensity - 1.9 * _minIntensity);
 
   if (_debug) {
-    cout << "---------------------------------------" << endl;
-    cout << "     INITIALIZE ROBUST STATISTICS      " << endl;
-    PrintImageSums();
-    cout << "_sigmaCPU: " << _sigmaCPU << endl;
-    cout << "_mCPU: " << _mCPU << endl;
-    cout << "---------------------------------------" << endl;
+    PrintImageSums("[InitializeRobustStatistics output]");
+    cout << "[InitializeRobustStatistics output] _sigmaCPU: " << _sigmaCPU << endl;
+    cout << "[InitializeRobustStatistics output] _mCPU: " << _mCPU << endl;
   }
 }
 
@@ -1720,14 +1776,12 @@ void irtkReconstruction::EStepI() {
   Gather("EStepI");
 
   if (_debug) {
-    cout << "---------------------------------------" << endl;
-    cout << "                ESTEP_I                " << endl;
-    cout << "_sum: " << _sum << endl;
-    cout << "_den: " << _den << endl;
-    cout << "_den2: " << _den2 << endl;
-    cout << "_sum2: " << _sum2 << endl;
-    cout << "_maxs: " << _maxs << endl;
-    cout << "_mins: " << _mins << endl;
+    cout << "[EStepI output] _sum: " << _sum << endl;
+    cout << "[EStepI output] _den: " << _den << endl;
+    cout << "[EStepI output] _den2: " << _den2 << endl;
+    cout << "[EStepI output] _sum2: " << _sum2 << endl;
+    cout << "[EStepI output] _maxs: " << _maxs << endl;
+    cout << "[EStepI output] _mins: " << _mins << endl;
   }
 
   if (_den > 0)
@@ -1741,9 +1795,8 @@ void irtkReconstruction::EStepI() {
     _meanS2CPU = (_maxs + _meanSCPU) / 2;
 
   if (_debug) {
-    cout << "_meanSCPU: " << _meanSCPU << endl;
-    cout << "_meanS2CPU: " << _meanS2CPU << endl;
-    cout << "---------------------------------------" << endl;
+    cout << "[EStepI output] _meanSCPU: " << _meanSCPU << endl;
+    cout << "[EStepI output] _meanS2CPU: " << _meanS2CPU << endl;
   }
 }
 
@@ -1774,12 +1827,10 @@ void irtkReconstruction::EStepII() {
   Gather("EStepII");
 
   if (_debug) {
-    cout << "---------------------------------------" << endl;
-    cout << "                ESTEP_II               " << endl;
-    cout << "_sum: " << _sum << endl;
-    cout << "_den: " << _den << endl;
-    cout << "_den2: " << _den2 << endl;
-    cout << "_sum2: " << _sum2 << endl;
+    cout << "[EStepII output] _sum: " << _sum << endl;
+    cout << "[EStepII output] _den: " << _den << endl;
+    cout << "[EStepII output] _den2: " << _den2 << endl;
+    cout << "[EStepII output] _sum2: " << _sum2 << endl;
   }
 
   // [fetalRecontruction] do not allow too small sigma
@@ -1802,9 +1853,8 @@ void irtkReconstruction::EStepII() {
   }
 
   if (_debug) {
-    cout << "_sigmaSCPU: " << _sigmaSCPU << endl;
-    cout << "_sigmaS2CPU: " << _sigmaS2CPU << endl;
-    cout << "---------------------------------------" << endl;
+    cout << "[EStepII output] _sigmaSCPU: " << _sigmaSCPU << endl;
+    cout << "[EStepII output] _sigmaS2CPU: " << _sigmaS2CPU << endl;
   }
 }
 
@@ -1837,10 +1887,8 @@ void irtkReconstruction::EStepIII() {
   Gather("EStepIII");
 
   if (_debug) {
-    cout << "---------------------------------------" << endl;
-    cout << "                ESTEP_III              " << endl;
-    cout << "_sum: " << _sum << endl;
-    cout << "_num: " << _num << endl;
+    cout << "[EStepIII output] _sum: " << _sum << endl;
+    cout << "[EStepIII output] _num: " << (int) _num << endl;
   }
 
   if (_num > 0)
@@ -1849,8 +1897,7 @@ void irtkReconstruction::EStepIII() {
     _mixSCPU = 0.9;
 
   if (_debug) {
-    cout << "_mixSCPU: " << _mixSCPU << endl;
-    cout << "---------------------------------------" << endl;
+    cout << "[EStepIII output] _mixSCPU: " << _mixSCPU << endl;
   }
 }
 
@@ -2051,13 +2098,11 @@ void irtkReconstruction::BiasCorrectVolume(irtkRealImage &original) {
 
 void irtkReconstruction::SuperResolution(int iteration) {
 
-  cout << "------------ Superresolution parameters -----------" << endl;
-  cout << "iteration: " << iteration << endl;
-  cout << "alpha: " << _alpha << endl;
-  cout << "global_bias_correction: " << _globalBiasCorrection << endl;
-  cout << "min_intensity: " << _minIntensity << endl;
-  cout << "max_intensity: " << _maxIntensity << endl;
-  cout << "---------------------------------------------------" << endl;
+  cout << "[SuperResolution input] iteration: " << iteration << endl;
+  cout << "[SuperResolution input] _alpha: " << _alpha << endl;
+  cout << "[SuperResolution input] _globalBiasCorrection: " << _globalBiasCorrection << endl;
+  cout << "[SuperResolution input] _minIntensity: " << _minIntensity << endl;
+  cout << "[SuperResolution input] _maxIntensity: " << _maxIntensity << endl;
 
   if (iteration == 1) {
     _addon.Initialize(_reconstructed.GetImageAttributes());
@@ -2124,12 +2169,11 @@ void irtkReconstruction::SuperResolution(int iteration) {
   }
 
   if (_debug) {
-    cout << "---------------------------------------" << endl;
-    cout << "            SUPERRESOLUTION            " << endl;
-    PrintImageSums();
-    cout << "_addon: " << SumImage(_addon) << endl;
-    cout << "_confidenceMap: " << SumImage(_confidenceMap) << endl;
-    cout << "---------------------------------------" << endl;
+    PrintImageSums("[SuperResolution output]");
+    cout << fixed << "[SuperResolution output] _addon: " 
+      << SumImage(_addon) << endl;
+    cout << fixed << "[SuperResolution output] _confidenceMap: " 
+      << SumImage(_confidenceMap) << endl;
   }
 }
 

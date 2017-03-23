@@ -156,7 +156,10 @@ if( ${CMAKE_SYSTEM_NAME} STREQUAL "EbbRT")
 
   add_executable(reconstruction.elf ${BAREMETAL_SOURCES} ${IRTK_IMAGE_SRC} ${IRTK_COMMON_SRC} ${IRTK_GEOMETRY_SRC} ${IRTK_contrib_SRC} ${IRTK_NIFTI_SRC} ${IRTK_ZNZ_SRC} ${IRTK_TRANSFORMATION_SRC} ${IRTK_REGISTRATION_SRC})
 
-  target_link_libraries(reconstruction.elf ${CMAKE_SOURCE_DIR}/libs/libboost_serialization.a ${CMAKE_SOURCE_DIR}/libs/libboost_system.a ${CMAKE_SOURCE_DIR}/libs/libboost_wserialization.a ${CMAKE_SOURCE_DIR}/libs/libgsl.a ${CMAKE_SOURCE_DIR}/libs/libgslcblas.a)
+  #target_link_libraries(reconstruction.elf ${CMAKE_SOURCE_DIR}/libs/libboost_serialization.a ${CMAKE_SOURCE_DIR}/libs/libboost_system.a ${CMAKE_SOURCE_DIR}/libs/libboost_wserialization.a ${CMAKE_SOURCE_DIR}/libs/libgsl.a ${CMAKE_SOURCE_DIR}/libs/libgslcblas.a)
+ target_link_libraries(reconstruction.elf ${CMAKE_SOURCE_DIR}/libs/libboost_serialization.a ${CMAKE_SOURCE_DIR}/libs/libboost_system.a ${CMAKE_SOURCE_DIR}/libs/libboost_wserialization.a ${CMAKE_SOURCE_DIR}/libs/libgsl.a)
+  
+  
   
   add_custom_command(TARGET reconstruction.elf POST_BUILD 
     COMMAND objcopy -O elf32-i386 reconstruction.elf reconstruction.elf32 )

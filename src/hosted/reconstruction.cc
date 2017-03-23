@@ -354,7 +354,7 @@ void volumetricRegistration(EbbRef<irtkReconstruction> reconstruction,
     int templateNumber) {
 
   if (ARGUMENTS.debug) {
-    std::cout << "Performing volumentric registrations" << std::endl;
+    std::cout << "Performing volumetric registrations" << std::endl;
   }
 
   if (ARGUMENTS.T1PackageSize == 0 && ARGUMENTS.sFolder.empty()) {

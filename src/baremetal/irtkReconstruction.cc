@@ -298,27 +298,26 @@ void irtkReconstruction::ResetOrigin(
  */
 
 void printCoeffInitParameters(struct coeffInitParameters parameters) {
-  cout << "CoeffInit() Parameters: " << endl;
-  cout << "stackFactor: " << parameters.stackFactor << endl;
-  cout << "stackIndex: " << parameters.stackIndex << endl;
-  cout << "delta: " << parameters.delta << endl;
-  cout << "lambda: " << parameters.lambda << endl;
-  cout << "alpha: " << parameters.alpha << endl;
-  cout << "qualityFactor: " << parameters.qualityFactor << endl;
+  cout << "[CoeffInit input] stackFactor: " << parameters.stackFactor << endl;
+  cout << "[CoeffInit input] stackIndex: " << parameters.stackIndex << endl;
+  cout << "[CoeffInit input] delta: " << parameters.delta << endl;
+  cout << "[CoeffInit input] lambda: " << parameters.lambda << endl;
+  cout << "[CoeffInit input] alpha: " << parameters.alpha << endl;
+  cout << "[CoeffInit input] qualityFactor: " << parameters.qualityFactor << endl;
 }
 
 void printReconstructionParameters(struct reconstructionParameters parameters) {
-  cout << "Global Bias Correction: " << parameters.globalBiasCorrection << endl;
-  cout << "start: " << parameters.start << endl;
-  cout << "end: " << parameters.end << endl;
-  cout << "Adaptive: " << parameters.adaptive << endl;
-  cout << "Sigma Bias: " << parameters.sigmaBias << endl;
-  cout << "Step: " << parameters.step << endl;
-  cout << "Sigma SCPU: " << parameters.sigmaSCPU << endl;
-  cout << "Sigma S2CPU: " << parameters.sigmaS2CPU << endl;
-  cout << "Mix SCPU: " << parameters.mixSCPU << endl;
-  cout << "Mix CPU: " << parameters.mixCPU << endl;
-  cout << "Low Intensity Cutoff" << parameters.lowIntensityCutoff << endl;
+  cout << "CoeffInit input] Global Bias Correction: " << parameters.globalBiasCorrection << endl;
+  cout << "CoeffInit input] start: " << parameters.start << endl;
+  cout << "CoeffInit input] end: " << parameters.end << endl;
+  cout << "CoeffInit input] Adaptive: " << parameters.adaptive << endl;
+  cout << "CoeffInit input] Sigma Bias: " << parameters.sigmaBias << endl;
+  cout << "CoeffInit input] Step: " << parameters.step << endl;
+  cout << "CoeffInit input] Sigma SCPU: " << parameters.sigmaSCPU << endl;
+  cout << "CoeffInit input] Sigma S2CPU: " << parameters.sigmaS2CPU << endl;
+  cout << "CoeffInit input] Mix SCPU: " << parameters.mixSCPU << endl;
+  cout << "CoeffInit input] Mix CPU: " << parameters.mixCPU << endl;
+  cout << "CoeffInit input] Low Intensity Cutoff" << parameters.lowIntensityCutoff << endl;
 }
 
 void irtkReconstruction::StoreParameters(
@@ -354,13 +353,13 @@ void irtkReconstruction::StoreCoeffInitParameters(
   _qualityFactor = parameters.qualityFactor;
   
   /*
-  auto nRigidTrans = dp.Get<int>();	
-  _transformations.resize(nRigidTrans);
+   * auto nRigidTrans = dp.Get<int>();	
+  //_transformations.resize(nRigidTrans);
   for(int i = 0; i < nRigidTrans; i++) {
     DeserializeTransformations(dp, _transformations[i]);
   }
+  DeserializeSlice(dp, _reconstructed);
   */
-  //DeserializeSlice(dp, _reconstructed);
 }
 
 void irtkReconstruction::CoeffInitBootstrap(
@@ -474,8 +473,7 @@ void irtkReconstruction::InitializeEM() {
 }
 
 void irtkReconstruction::ParallelCoeffInit() {
-  cout << "Before CoeffInit" << endl;
-  PrintImageSums();
+  PrintImageSums("[CoeffInit input]");
 
   /*
    for (int i = 0; i < _slices.size(); i++) {
@@ -523,8 +521,8 @@ void irtkReconstruction::ParallelCoeffInit() {
     //reconstructed volume
     double size = res / _qualityFactor;
 
-    cout << "size[" << index << "]: " << size << " res: " << res 
-      << " _qualityFactor" << _qualityFactor << endl; 
+    //cout << "size[" << index << "]: " << size << " res: " << res 
+    //  << " _qualityFactor" << _qualityFactor << endl; 
 
     //number of voxels in each direction
     //the ROI is 2*voxel dimension
@@ -1596,8 +1594,9 @@ void irtkReconstruction::ParallelSliceToVolumeRegistration() {
 
       registration.GuessParameterSliceToVolume();
       registration.SetTargetPadding(-1);
+      cout << "Transformation: " << inputIndex << endl;
+      _transformations[inputIndex].Print2();
       registration.Run();
-      
       cout << "Transformation: " << inputIndex << endl;
       _transformations[inputIndex].Print2();
 
@@ -1687,220 +1686,157 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
   switch(fn) {
     case COEFF_INIT:
       {
-        if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "               COEFFINIT               " << endl;
-        }
 
         CoeffInit(dp);
         ReturnFrom(COEFF_INIT,nid);
 
         if (_debug) {
-          cout << "_averageVolumeWeight: " << _averageVolumeWeight << endl;
-          PrintImageSums();
-          cout << "---------------------------------------" << endl;
+          cout << "[CoeffInit output] _averageVolumeWeight: " << _averageVolumeWeight << endl;
+          PrintImageSums("[CoeffInit output]");
         }
 
         break;
       }
     case GAUSSIAN_RECONSTRUCTION:
       {
-        if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "       GAUSSIAN RECONSTRUCTION         " << endl;
-        }
-
         GaussianReconstruction();
         ReturnFromGaussianReconstruction(nid);
 
         if (_debug) {
-          PrintImageSums();
-          cout << fixed << "_volumeWeights: " 
+          PrintImageSums("[GaussianReconstruction output]");
+          cout << fixed << "[GaussianReconstruction output] _volumeWeights: " 
             << SumImage(_volumeWeights) << endl;
-          cout << "---------------------------------------" << endl;
         }
 
         break;
       }
     case SIMULATE_SLICES:
       {
-        if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "           SIMULATE SLICES             " << endl;
-        }
-
         SimulateSlices(dp);
         ReturnFrom(SIMULATE_SLICES, nid);
 
         if (_debug) {
-          PrintImageSums();
-          //PrintVectorSums(_simulatedSlices, "Simulated Slices");    
-          //PrintVectorSums(_simulatedWeights, "Simulated Weights");    
-          //PrintVectorSums(_simulatedInside, "Simulated Inside");
-          cout << "---------------------------------------" << endl;
+          PrintImageSums("[SimulateSlices output]");
         }
 
         break;
       }
     case INITIALIZE_ROBUST_STATISTICS:
       {
-        if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "     INITIALIZE ROBUST STATISTICS      " << endl;
-        }
-
         double sigma;
         int num;
         InitializeRobustStatistics(sigma, num);
         ReturnFromInitializeRobustStatistics(sigma, num, nid);
 
         if (_debug) {
-          cout << "sigma: " << sigma << endl;
-          cout << "num: " << num << endl; 
-          cout << "---------------------------------------" << endl;
+          cout << "[InitializeRobustStatistics output] sigma: " << sigma << endl;
+          cout << "[InitializeRobustStatistics output] num: " << num << endl; 
         }
 
         break;
       }
     case E_STEP_I:
       {
-        if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "               ESTEP I                 " << endl;
-        }
+        
+        if (_debug)
+          cout << "[EStepI]" << endl;
 
         auto parameters = EStepI(dp);
         ReturnFromEStepI(parameters, nid);
         
-        if (_debug)
-          cout << "---------------------------------------" << endl;
         break;
       }
     case E_STEP_II:
       {
+        
+        if (_debug)
+          cout << "[EStepII]" << endl;
 
-        if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "               ESTEP II                " << endl;
-        }
         auto parameters = EStepII(dp);
         ReturnFromEStepII(parameters, nid);
-
-        if (_debug)
-          cout << "---------------------------------------" << endl;
-          
+        
         break;
       }
     case E_STEP_III:
       {
-        if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "               ESTEP III               " << endl;
-        }
+        if (_debug)
+          cout << "[EStepIII]" << endl;
+
         auto parameters = EStepIII(dp);
         ReturnFromEStepIII(parameters, nid);
-
-        if (_debug)
-          cout << "---------------------------------------" << endl;
 
         break;
       }
     case SCALE:
       {
-        if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "                 SCALE                 " << endl;
-        }
-
         Scale();
         ReturnFromScale(nid);
 
         if (_debug) {
-          PrintImageSums();
-          cout << "---------------------------------------" << endl;
+          PrintImageSums("[Scale output]");
         }
 
         break;
       }
     case SUPERRESOLUTION:
       {
-        if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "            SUPERRESOLUTION            " << endl;
-        }
         SuperResolution(dp);
         ReturnFromSuperResolution(nid);
 
         if (_debug) {
-          cout << fixed << "Addon: " << SumImage(_addon) << endl;
-          cout << fixed << "ConfidenceMap: " 
+          cout << fixed << "[SuperResolution output} _addon: " << SumImage(_addon) << endl;
+          cout << fixed << "[SuperResolution output} _confidenceMap: " 
             << SumImage(_confidenceMap) << endl;
-          cout << "---------------------------------------" << endl;
         }
 
         break;
       }
     case M_STEP:
       {
-        if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "                MSTEP                  " << endl;
-        }
         mStepReturnParameters parameters;
         MStep(parameters, dp);
         ReturnFromMStep(parameters, nid);
         
         if (_debug) {
-          cout << "sigma: " << parameters.sigma << endl;
-          cout << "mix: " << parameters.mix << endl;
-          cout << "num: " << parameters.num << endl;
-          cout << "min: " << parameters.min << endl;
-          cout << "max: " << parameters.max << endl;
-          cout << "---------------------------------------" << endl;
+          cout << "[MStep output] sigma: " << parameters.sigma << endl;
+          cout << "[MStep output] mix: " << parameters.mix << endl;
+          cout << "[MStep output] num: " << parameters.num << endl;
+          cout << "[MStep output] min: " << parameters.min << endl;
+          cout << "[MStep output] max: " << parameters.max << endl;
         }
         break;
       }
     case RESTORE_SLICE_INTENSITIES:
       {
         if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "       RESTORE_SLICE_INTENSITIES       " << endl;
+          cout << "[RestoreSliceIntensities]" << endl;
         }
 
         RestoreSliceIntensities();
         ReturnFromRestoreSliceIntensities(nid);
         
-        if (_debug)
-          cout << "---------------------------------------" << endl;
-
         break;  
       }
     case SCALE_VOLUME: 
       {
         if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "             SCALE_VOLUME              " << endl;
+          cout << "[ScaleVolume]" << endl;
         }
 
         auto parameters = ScaleVolume();
         ReturnFromScaleVolume(parameters, nid);
 
-        if (_debug)
-          cout << "---------------------------------------" << endl;
         break;
       }
     case SLICE_TO_VOLUME_REGISTRATION:
       {
         if (_debug) {
-          cout << "---------------------------------------" << endl;
-          cout << "     SLICE_TO_VOLUME_REGISTRATION      " << endl;
+          cout << "[SliceToVolumeRegistration]" << endl;
         }
 
         SliceToVolumeRegistration(dp);
         ReturnFromSliceToVolumeRegistration(nid);
        
-        if (_debug)
-          cout << "---------------------------------------" << endl;
         break;
       }
     default:

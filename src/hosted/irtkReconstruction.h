@@ -332,6 +332,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     void ReturnFromScaleVolume(ebbrt::IOBuf::DataPointer & dp);
 
     //SliceToVolumeRegistration() function
+    void ParallelSliceToVolumeRegistration();
+
     void SliceToVolumeRegistration();
 
     void ReturnFromSliceToVolumeRegistration(ebbrt::IOBuf::DataPointer & dp);
@@ -346,7 +348,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     // For debugging purposes
     inline double SumImage(irtkRealImage img);
 
-    inline void PrintImageSums();
+    inline void PrintImageSums(string s);
 
     inline void PrintVectorSums(vector<irtkRealImage> images, string name);
 
@@ -378,16 +380,11 @@ inline double irtkReconstruction::SumImage(irtkRealImage img) {
   return (double)sum;
 }
 
-inline void irtkReconstruction::PrintImageSums() {
-  /*
-  cout << "_externalRegistrationTargetImage: " 
-       << SumImage(_externalRegistrationTargetImage) << endl; 
-  */
-
-  cout << fixed << "_reconstructed: " 
+inline void irtkReconstruction::PrintImageSums(string s) {
+  cout << fixed << s << " _reconstructed: " 
        << SumImage(_reconstructed) << endl;
 
-  cout << fixed << "_mask: "
+  cout << fixed << s << " _mask: "
        << SumImage(_mask) << endl;
 }
 

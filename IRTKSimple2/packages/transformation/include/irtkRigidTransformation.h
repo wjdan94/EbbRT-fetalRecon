@@ -364,12 +364,6 @@ inline void irtkRigidTransformation::SetParameters(double *params) {
   this->UpdateMatrix();
 }
 
-inline void irtkRigidTransformation::Print2() {
-    cout << _tx << " " << _ty << " " << _tz << " " << _rx << " " << _ry << " " << _rz << " " << _cosrx << " " << _cosry << " " << _cosrz << " " << _sinrx << " " << _sinry << " " << _sinrz << endl; 
-    
-    _matrix.Print();
-}
-
 inline void irtkRigidTransformation::Print3() {
     cout << _tx << " " << _ty << " " << _tz << " " << _rx << " " << _ry << " " << _rz << " " << _cosrx << " " << _cosry << " " << _cosrz << " " << _sinrx << " " << _sinry << " " << _sinrz << " _status: " << _status[0] << " " << _status[1] <<" " << _status[2] <<" " << _status[3] <<" " << _status[4] <<" " << _status[5]; 
     
