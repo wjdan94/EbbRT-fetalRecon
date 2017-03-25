@@ -1,5 +1,9 @@
+//    Copyright Boston University SESA Group 2013 - 2014.
+// Distributed under the Boost Software License, Version 1.0.
+//    (See accompanying file LICENSE_1_0.txt or copy at
+//          http://www.boost.org/LICENSE_1_0.txt)
+
 #include "irtkReconstruction.h"
-#include "../parameters.h"
 
 #include <irtkResampling.h>
 // Warning: The following three libraries must be imported toghether
@@ -119,17 +123,11 @@ irtkReconstruction::irtkReconstruction(EbbId ebbid)
 void irtkReconstruction::SetParameters(arguments args) {
   _outputName = args.outputName;  // Not used
   _maskName = args.maskName; // Not used
-  _referenceVolumeName = args.referenceVolumeName; // Not used
-  _logId = args.logId; // Not used
-  _tFolder = args.tFolder; // Not used
-  _sFolder = args.sFolder; // Not used
 
   _inputStacks = args.inputStacks; // Not used
   _inputTransformations = args.inputTransformations; // Not used
   _thickness = args.thickness; // Not used
-  _packages = args.packages; // Not used
   _forceExcluded = args.forceExcluded; // Not used
-  _devicesToUse = args.devicesToUse; // Not used
 
   _iterations = args.iterations;  
   _levels = args.levels; // Not used
@@ -138,10 +136,6 @@ void irtkReconstruction::SetParameters(arguments args) {
   _numThreads = args.numThreads; // Not used
   _numBackendNodes = args.numBackendNodes; 
   _numFrontendCPUs = args.numFrontendCPUs; // Not used
-
-  _numInputStacksTuner = args.numInputStacksTuner; // Not used
-  _T1PackageSize = args.T1PackageSize; // Not used
-  _numDevicesToUse = args.numDevicesToUse; // Not used
 
   _sigma = (args.sigma) > 0 ? args.sigma : 20;
   _resolution = args.resolution; // Not used
@@ -157,11 +151,6 @@ void irtkReconstruction::SetParameters(arguments args) {
   _globalBiasCorrection = args.globalBiasCorrection; 
   _intensityMatching = args.intensityMatching; 
   _debug = args.debug; 
-  _noLog = args.noLog; // Not used
-  _useCPU = args.useCPU; // Not used
-  _useCPUReg = _useCPU; // Not used
-  _useAutoTemplate = args.useAutoTemplate; // Not used
-  _useSINCPSF = args.useSINCPSF; // Not used
   _disableBiasCorr = args.disableBiasCorr; // Not used
 }
 

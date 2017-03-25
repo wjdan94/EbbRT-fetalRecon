@@ -1,4 +1,4 @@
-//          Copyright Boston University SESA Group 2013 - 2014.
+//    Copyright Boston University SESA Group 2013 - 2014.
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
@@ -33,13 +33,6 @@ void parseInputParameters(int argc, char **argv) {
         po::value<vector<double>>(&ARGUMENTS.thickness)->multitoken(),
         "[th_1] .. [th_N] Give slice thickness.[Default: twice voxel size in z "
         "direction]")
-      ("packages,p", 
-        po::value<vector<int>>(&ARGUMENTS.packages)->multitoken(),
-        "Give number of packages used during acquisition for each stack. The "
-        "stacks will be split into packages during registration iteration 1 "
-        "and then into odd and even slices within each package during "
-        "registration iteration 2. The method will then continue with slice to "
-        " volume approach. [Default: slice to volume registration only]")
       ("iterations", 
         po::value<int>(&ARGUMENTS.iterations)->default_value(1),
         "Number of registration-reconstruction iterations.")
@@ -82,9 +75,6 @@ void parseInputParameters(int argc, char **argv) {
       ("noIntensityMatching", 
         po::value<bool>(&ARGUMENTS.intensityMatching)->default_value(true),
         "Switch off intensity matching.")
-      ("logPrefix", 
-        po::value<string>(&ARGUMENTS.logId), 
-        "Prefix for the log file.")
       ("debug", 
         po::value<bool>(&ARGUMENTS.debug)->default_value(false),
         "Debug mode - save intermediate results.")
@@ -98,13 +88,6 @@ void parseInputParameters(int argc, char **argv) {
         po::value<unsigned int>(&ARGUMENTS.numInputStacksTuner)->default_value(0),
         "Set number of input stacks that are really used (for tuner "
         "evaluation, use only first x)")
-      ("noLog", 
-        po::value<bool>(&ARGUMENTS.noLog)->default_value(false),
-        "Do not redirect cout and cerr to log files.")
-      ("devices,d", 
-        po::value<vector<int>>(&ARGUMENTS.devicesToUse)->multitoken(),
-        "Select the CP > 3.0 GPUs on which the reconstruction should be "
-        "executed. Default: all devices > CP 3.0")
       ("tFolder", po::value<string>(&ARGUMENTS.tFolder),
         "[folder] Use existing slice-to-volume transformations to initialize "
         "the reconstruction.")
@@ -112,34 +95,10 @@ void parseInputParameters(int argc, char **argv) {
         po::value<string>(&ARGUMENTS.sFolder),
         "[folder] Use existing registered slices and replace loaded ones "
         "(have to be equally many as loaded from stacks).")
-      ("referenceVolume", 
-        po::value<string>(&ARGUMENTS.referenceVolumeName),
-        "Name for an optional reference volume. Will be used as inital "
-        "reconstruction.")
       ("T1PackageSize", 
         po::value<unsigned int>(&ARGUMENTS.T1PackageSize)->default_value(0),
         "is a test if you can register T1 to T2 using NMI and only one "
         "iteration")
-      ("numDevicesToUse", 
-        po::value<unsigned int>
-        (&ARGUMENTS.numDevicesToUse)->default_value(UINT_MAX),
-        "sets how many GPU devices to use in case of automatic device "
-        "selection. Default is as many as available.")
-      ("useCPU", po::bool_switch(&ARGUMENTS.useCPU)->default_value(false),
-        "use CPU for reconstruction and registration; performs superresolution "
-        "and robust statistics on CPU. Default is using the GPU")
-      ("useCPUReg", 
-        po::bool_switch(&ARGUMENTS.useCPUReg)->default_value(true),
-        "use CPU for more flexible CPU registration; performs superresolution "
-        "and robust statistics on GPU. [default, best result]")
-      ("useAutoTemplate",
-        po::bool_switch(&ARGUMENTS.useAutoTemplate)->default_value(false),
-        "select 3D registration template stack automatically with matrix rank "
-        "method.")
-      ("useSINCPSF", 
-        po::bool_switch(&ARGUMENTS.useSINCPSF)->default_value(false), 
-        "use a more MRI like SINC point spread function (PSF) Will " 
-        "be in plane sinc (Bartlett) and through plane Gaussian.")
       ("disableBiasCorrection",
         po::bool_switch(&ARGUMENTS.disableBiasCorr)->default_value(false),
         "disable bias field correction for cases with little or no bias field "
@@ -347,7 +306,6 @@ void applyMask(EbbRef<irtkReconstruction> reconstruction,
   }
 }
 
-// TODO: This function should be done in parallel
 void volumetricRegistration(EbbRef<irtkReconstruction> reconstruction,
     vector<irtkRealImage> stacks, 
     vector<irtkRigidTransformation>& stackTransformations,

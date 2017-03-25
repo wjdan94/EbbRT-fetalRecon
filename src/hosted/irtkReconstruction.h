@@ -1,5 +1,8 @@
+//    Copyright Boston University SESA Group 2013 - 2014.
+// Distributed under the Boost Software License, Version 1.0.
+//    (See accompanying file LICENSE_1_0.txt or copy at
+//          http://www.boost.org/LICENSE_1_0.txt)
 
-#include "common.h"
 #include "../utils.h"
 
 #include <irtkImage.h>
@@ -30,53 +33,38 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     ebbrt::Promise<void> _backendsAllocated;
 
     // Input parameters
-    string _outputName;  // Not used
-    string _maskName; // Not used
-    string _referenceVolumeName; // Not used
-    string _logId; // Not used
-    string _tFolder; // Not used
-    string _sFolder; // Not used
+    string _outputName;  
+    string _maskName; 
 
-    vector<string> _inputStacks; // Not used
-    vector<string> _inputTransformations; // Not used
+    vector<string> _inputStacks; 
+    vector<string> _inputTransformations; 
 
-    vector<double> _thickness; // Not used
+    vector<double> _thickness; 
 
-    vector<int> _packages; // Not used
-    vector<int> _forceExcluded; // Not used
-    vector<int> _devicesToUse; // Not used
+    vector<int> _forceExcluded; 
 
     int _iterations;  
-    int _levels; // Not used
+    int _levels; 
     int _recIterationsFirst; 
     int _recIterationsLast; 
-    int _numThreads; // Not used
+    int _numThreads; 
     int _numBackendNodes; 
-    int _numFrontendCPUs; // Not used
+    int _numFrontendCPUs; 
 
-    unsigned int _numInputStacksTuner; // Not used
-    unsigned int _T1PackageSize; // Not used
-    unsigned int _numDevicesToUse; // Not used
-
-    double _sigma; // Not used
-    double _resolution; // Not used
-    double _averageValue; // Not used
+    double _sigma; 
+    double _resolution; 
+    double _averageValue; 
     double _delta; 
     double _lambda; 
     double _smoothingLambda; 
-    double _lastIterLambda; // Not used
-    double _smoothMask; // Not used
-    double _lowIntensityCutoff; // Not used
+    double _lastIterLambda; 
+    double _smoothMask; 
+    double _lowIntensityCutoff; 
 
-    bool _globalBiasCorrection; // Not used
-    bool _intensityMatching; // Not used
+    bool _globalBiasCorrection; 
+    bool _intensityMatching; 
     bool _debug; 
-    bool _noLog; 
-    bool _useCPU; 
-    bool _useCPUReg; // Not used
-    bool _useAutoTemplate; // Not used
-    bool _useSINCPSF; // Not used
-    bool _disableBiasCorr; // Not used
+    bool _disableBiasCorr; 
 
     // Internal parameters
     const double _sigmaFactor = 6.28;
