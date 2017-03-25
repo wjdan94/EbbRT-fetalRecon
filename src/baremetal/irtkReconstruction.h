@@ -22,6 +22,7 @@
 #include <ebbrt/native/Clock.h>
 
 #include "../utils.h"
+#include "../serialize.h"
 
 using namespace ebbrt;
 using namespace std;
@@ -228,13 +229,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     inline void PrintVector(vector<int> vec, string name);
 
     inline void PrintAttributeVectorSums();
-    
-    // Serialize
-    void DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp);
-
-    void DeserializeTransformations(ebbrt::IOBuf::DataPointer& dp, irtkRigidTransformation& tmp);
-
-    std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeTransformations();
     
     void ResetOrigin(irtkGreyImage &image, irtkRigidTransformation &transformation);
 

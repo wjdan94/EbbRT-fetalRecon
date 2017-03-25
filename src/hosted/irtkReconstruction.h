@@ -4,6 +4,7 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 #include "../utils.h"
+#include "../serialize.h"
 
 #include <irtkImage.h>
 #include <irtkTransformation.h>
@@ -342,20 +343,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     inline void PrintVectorSums(vector<irtkRealImage> images, string name);
 
     inline void PrintAttributeVectorSums();
-
-    // Serialize
-    void DeserializeSlice(ebbrt::IOBuf::DataPointer& dp, irtkRealImage& tmp);
-
-    std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeSlices();
-
-    std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeMask();
-
-    std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeReconstructed();
-
-    std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeTransformations();
-
-    void DeserializeTransformations(ebbrt::IOBuf::DataPointer& dp, 
-        irtkRigidTransformation& tmp);
 };
 
 inline double irtkReconstruction::SumImage(irtkRealImage img) {

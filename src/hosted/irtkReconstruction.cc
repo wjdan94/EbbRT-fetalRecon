@@ -155,244 +155,11 @@ void irtkReconstruction::SetParameters(arguments args) {
 }
 
 /*
- * Serialize
- */
-
-std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeImageAttr(irtkRealImage ri) {
-  irtkImageAttributes at;
-
-  at = ri.GetImageAttributes();
-
-  auto buf = MakeUniqueIOBuf((4 * sizeof(int)) + (17 * sizeof(double)));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = at._x;
-  dp.Get<int>() = at._y;
-  dp.Get<int>() = at._z;
-  dp.Get<int>() = at._t;
-
-  // Default voxel size
-  dp.Get<double>() = at._dx;
-  dp.Get<double>() = at._dy;
-  dp.Get<double>() = at._dz;
-  dp.Get<double>() = at._dt;
-
-  // Default origin
-  dp.Get<double>() = at._xorigin;
-  dp.Get<double>() = at._yorigin;
-  dp.Get<double>() = at._zorigin;
-  dp.Get<double>() = at._torigin;
-
-  // Default x-axis
-  dp.Get<double>() = at._xaxis[0];
-  dp.Get<double>() = at._xaxis[1];
-  dp.Get<double>() = at._xaxis[2];
-
-  // Default y-axis
-  dp.Get<double>() = at._yaxis[0];
-  dp.Get<double>() = at._yaxis[1];
-  dp.Get<double>() = at._yaxis[2];
-
-  // Default z-axis
-  dp.Get<double>() = at._zaxis[0];
-  dp.Get<double>() = at._zaxis[1];
-  dp.Get<double>() = at._zaxis[2];
-
-  return buf;
-}
-
-std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeImageI2W(irtkRealImage& ri) {
-  auto buf = MakeUniqueIOBuf(2 * sizeof(int));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = ri.GetWorldToImageMatrix().Rows();
-  dp.Get<int>() = ri.GetWorldToImageMatrix().Cols();
-
-  auto buf2 = std::make_unique<StaticIOBuf>(
-      reinterpret_cast<const uint8_t *>(ri.GetWorldToImageMatrix().GetMatrix()),
-      (size_t)(ri.GetWorldToImageMatrix().Rows() * 
-        ri.GetWorldToImageMatrix().Cols() * sizeof(double)));
-  buf->PrependChain(std::move(buf2));
-
-  return buf;
-}
-
-std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeImageW2I(irtkRealImage& ri) {
-  auto buf = MakeUniqueIOBuf(2 * sizeof(int));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = ri.GetWorldToImageMatrix().Rows();
-  dp.Get<int>() = ri.GetWorldToImageMatrix().Cols();
-
-  auto buf2 = std::make_unique<StaticIOBuf>(
-      reinterpret_cast<const uint8_t *>(ri.GetWorldToImageMatrix().GetMatrix()),
-      (size_t)(ri.GetWorldToImageMatrix().Rows() * 
-        ri.GetWorldToImageMatrix().Cols() * sizeof(double)));
-  buf->PrependChain(std::move(buf2));
-
-  return buf;
-}
-
-std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeSlices(irtkRealImage& ri) {
-  auto buf = MakeUniqueIOBuf(sizeof(int));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = ri.GetSizeMat();
-
-  auto buf2 = std::make_unique<StaticIOBuf>(
-      reinterpret_cast<const uint8_t *>(ri.GetMat()),
-      (size_t)(ri.GetSizeMat() * sizeof(double)));
-
-  buf->PrependChain(std::move(buf2));
-
-  return buf;
-}
-
-std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeRigidTransMat(
-    irtkRigidTransformation& rt) {
-  auto buf = MakeUniqueIOBuf(2 * sizeof(int));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = rt._matrix.Rows();
-  dp.Get<int>() = rt._matrix.Cols();
-
-  auto buf2 = std::make_unique<StaticIOBuf>(
-      reinterpret_cast<const uint8_t *>(rt._matrix.GetMatrix()),
-      (size_t)(rt._matrix.Rows() * rt._matrix.Cols()  * sizeof(double)));
-
-  buf->PrependChain(std::move(buf2));
-
-  return buf;
-}
-
-std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeRigidTrans(
-    irtkRigidTransformation& rt) {
-  auto buf = MakeUniqueIOBuf((12 * sizeof(double)) + (8 * sizeof(int)));
-  auto dp = buf->GetMutDataPointer();
-
-  dp.Get<double>() = rt._tx;
-  dp.Get<double>() = rt._ty;
-  dp.Get<double>() = rt._tz;
-
-  dp.Get<double>() = rt._rx;
-  dp.Get<double>() = rt._ry;
-  dp.Get<double>() = rt._rz;
-
-  dp.Get<double>() = rt._cosrx;
-  dp.Get<double>() = rt._cosry;
-  dp.Get<double>() = rt._cosrz;
-
-  dp.Get<double>() = rt._sinrx;
-  dp.Get<double>() = rt._sinry;
-  dp.Get<double>() = rt._sinrz;
-
-  dp.Get<int>() = (int)(rt._status[0]);
-  dp.Get<int>() = (int)(rt._status[1]);
-  dp.Get<int>() = (int)(rt._status[2]);
-  dp.Get<int>() = (int)(rt._status[3]);
-  dp.Get<int>() = (int)(rt._status[4]);
-  dp.Get<int>() = (int)(rt._status[5]);
-
-  dp.Get<int>() = rt._matrix.Rows();
-  dp.Get<int>() = rt._matrix.Cols();
-
-  auto buf2 = std::make_unique<StaticIOBuf>(
-      reinterpret_cast<const uint8_t *>(rt._matrix.GetMatrix()),
-      (size_t)(rt._matrix.Rows() * rt._matrix.Cols()  * sizeof(double)));
-
-  buf->PrependChain(std::move(buf2));
-
-  return buf;
-}
-
-std::unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeSlices()
-{
-  auto buf = MakeUniqueIOBuf(sizeof(int));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = _slices.size();
-
-  for (int j = 0; j < _slices.size(); j++) 
-  {
-    buf->PrependChain(std::move(serializeImageAttr(_slices[j])));
-    buf->PrependChain(std::move(serializeImageI2W(_slices[j])));
-    buf->PrependChain(std::move(serializeImageW2I(_slices[j])));
-    buf->PrependChain(std::move(serializeSlices(_slices[j])));
-  }
-
-  return buf;
-}
-
-std::unique_ptr<ebbrt::MutUniqueIOBuf> irtkReconstruction::SerializeMask()
-{
-  auto buf = MakeUniqueIOBuf(0);
-  buf->PrependChain(std::move(serializeImageAttr(_mask)));
-  buf->PrependChain(std::move(serializeImageI2W(_mask)));
-  buf->PrependChain(std::move(serializeImageW2I(_mask)));
-  buf->PrependChain(std::move(serializeSlices(_mask)));
-  return buf;
-}
-
-std::unique_ptr<ebbrt::MutUniqueIOBuf> 
-irtkReconstruction::SerializeReconstructed() {
-  auto buf = MakeUniqueIOBuf(0);
-  buf->PrependChain(std::move(serializeImageAttr(_reconstructed)));
-  buf->PrependChain(std::move(serializeImageI2W(_reconstructed)));
-  buf->PrependChain(std::move(serializeImageW2I(_reconstructed)));
-  buf->PrependChain(std::move(serializeSlices(_reconstructed)));
-  return buf;
-}
-
-std::unique_ptr<ebbrt::MutUniqueIOBuf> 
-irtkReconstruction::SerializeTransformations() {
-  auto buf = MakeUniqueIOBuf(sizeof(int));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = _transformations.size();
-
-  for(int j = 0; j < _transformations.size(); j++) {
-    buf->PrependChain(std::move(serializeRigidTrans(_transformations[j])));
-  }
-  return buf;
-}
-
-void irtkReconstruction::DeserializeTransformations(
-    ebbrt::IOBuf::DataPointer& dp, irtkRigidTransformation& tmp) {
-  auto tx = dp.Get<double>();
-  auto ty = dp.Get<double>();
-  auto tz = dp.Get<double>();
-
-  auto rx = dp.Get<double>();
-  auto ry = dp.Get<double>();
-  auto rz = dp.Get<double>();
-
-  auto cosrx = dp.Get<double>();
-  auto cosry = dp.Get<double>();
-  auto cosrz = dp.Get<double>();
-
-  auto sinx = dp.Get<double>();
-  auto siny = dp.Get<double>();
-  auto sinz = dp.Get<double>();
-
-  auto status0 = dp.Get<int>();
-  auto status1 = dp.Get<int>();
-  auto status2 = dp.Get<int>();
-  auto status3 = dp.Get<int>();
-  auto status4 = dp.Get<int>();
-  auto status5 = dp.Get<int>();
-
-  auto rows = dp.Get<int>();
-  auto cols = dp.Get<int>();
-  auto ptr = std::make_unique<double[]>(rows * cols);
-  dp.Get(rows * cols * sizeof(double), (uint8_t*)ptr.get());
-  irtkMatrix mat(rows, cols, std::move(ptr));
-
-  irtkRigidTransformation irt(tx, ty, tz, rx, ry, rz, cosrx, cosry,cosrz, sinx,
-      siny, sinz, status0, status1, status2, status3, status4, status5, mat);
-
-  tmp = std::move(irt);
-}
-
-/*
  * Pool Allocator helper functions
  */
 ebbrt::Future<void> irtkReconstruction::WaitPool() {
   return std::move(_backendsAllocated.GetFuture());
 }
-
 
 void irtkReconstruction::AddNid(ebbrt::Messenger::NetworkId nid) {
   _nids.push_back(nid);
@@ -554,7 +321,7 @@ void irtkReconstruction::ReturnFromSliceToVolumeRegistration(
   int end = dp.Get<int>();
 
   for(int i = start; i < end; i++) {
-    DeserializeTransformations(dp, _transformations[i]);
+    deserializeTransformations(dp, _transformations[i]);
   }
 
   ReturnFrom();
@@ -1382,10 +1149,10 @@ void irtkReconstruction::CoeffInitBootstrap(
         (size_t)(_stackIndex.size() * sizeof(int)));
 
     // TODO: Try to move this functions to another file
-    buf->PrependChain(std::move(SerializeSlices()));
-    buf->PrependChain(std::move(SerializeReconstructed()));
-    buf->PrependChain(std::move(SerializeMask()));
-    buf->PrependChain(std::move(SerializeTransformations()));
+    buf->PrependChain(std::move(serializeSlices(_slices)));
+    buf->PrependChain(std::move(serializeImage(_reconstructed)));
+    buf->PrependChain(std::move(serializeImage(_mask)));
+    buf->PrependChain(std::move(serializeTransformations(_transformations)));
     buf->PrependChain(std::move(sf));
     buf->PrependChain(std::move(si));
     _received = 0;
@@ -1409,9 +1176,6 @@ void irtkReconstruction::CoeffInit(struct coeffInitParameters parameters) {
     dp.Get<int>() = COEFF_INIT; 
     dp.Get<int>() = 0;
     dp.Get<struct coeffInitParameters>() = parameters;
-
-    //buf->PrependChain(std::move(SerializeTransformations()));
-    //buf->PrependChain(std::move(SerializeReconstructed()));
 
     _totalBytes += buf->ComputeChainDataLength();
     SendMessage(_nids[i], std::move(buf));
@@ -1488,7 +1252,7 @@ void irtkReconstruction::SimulateSlices(bool initialize) {
 
     dp.Get<int>() = SIMULATE_SLICES;
     dp.Get<int>() = (int) initialize;
-    buf->PrependChain(std::move(serializeSlices(_reconstructed)));
+    buf->PrependChain(std::move(serializeSlice(_reconstructed)));
 
     _totalBytes += buf->ComputeChainDataLength();
     SendMessage(_nids[i], std::move(buf));
@@ -1597,9 +1361,7 @@ void irtkReconstruction::SliceToVolumeRegistration() {
 
     dp.Get<int>() = SLICE_TO_VOLUME_REGISTRATION;
 
-    // TODO: there exist a SerializeReconstructed() function that
-    // can be used on this part. Why is it not being used?
-    buf->PrependChain(std::move(serializeSlices(_reconstructed)));
+    buf->PrependChain(std::move(serializeSlice(_reconstructed)));
 
     _totalBytes += buf->ComputeChainDataLength();
     SendMessage(_nids[i], std::move(buf));
