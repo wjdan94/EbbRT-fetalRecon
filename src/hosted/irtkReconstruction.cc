@@ -815,7 +815,6 @@ void irtkReconstruction::SetMask(irtkRealImage *mask, double sigma,
   _haveMask = true;
 }
 
-// TODO: This can be moved into another file
 class ParallelStackRegistrations {
   irtkReconstruction *reconstructor;
   vector<irtkRealImage> &stacks;
@@ -1228,11 +1227,7 @@ void irtkReconstruction::Execute() {
     if (_debug)
       cout << "[Iteration " << it << "] " << endl;
 
-    // TODO: fix for iterations greater than 1. For now just testing one
-    // iteration.
     if (it > 0) {
-      //TODO: Figure out if the package-related functions are needed
-      // or they can be discarded.
       SliceToVolumeRegistration();
     }
 
@@ -1555,11 +1550,6 @@ void irtkReconstruction::MStep(int iteration) {
   _mCPU = 1 / (_mMax - _mMin);
 
   if (_debug) {
-    //cout << "_mSigma: " << _mSigma << endl;
-    //cout << "_mMix: " << _mMix << endl;
-    //cout << "_mNum: " << _mNum << endl;
-    //cout << "_mMin: " << _mMin << endl;
-    //cout << "_mMax: " << _mMax << endl;
     cout << "[MStep output] _sigmaCPU: " << _sigmaCPU << endl;
     cout << "[MStep output] _mixCPU: " << _mixCPU << endl;
     cout << "[MStep output] _mCPU: " << _mCPU << endl;
@@ -1610,78 +1600,6 @@ void irtkReconstruction::ScaleVolume() {
   }
 }
 
-void irtkReconstruction::ParallelSliceToVolumeRegistration() {
-  irtkImageAttributes attr = _reconstructed.GetImageAttributes();
-
-  for (int inputIndex = 0; inputIndex < _slices.size(); inputIndex++) {
-    irtkImageRigidRegistrationWithPadding registration;
-    irtkGreyPixel smin, smax;
-    irtkGreyImage target;
-    irtkRealImage slice, w, b, t;
-    irtkResamplingWithPadding<irtkRealPixel> resampling(attr._dx, attr._dx,
-                                                        attr._dx, -1);
-
-    t = _slices[inputIndex];
-    resampling.SetInput(&_slices[inputIndex]);
-    resampling.SetOutput(&t);
-    resampling.Run();
-    target = t;
-    target.GetMinMax(&smin, &smax);
-
-    if (smax > -1) {
-      // [fetalRecontruction] put origin to zero
-      irtkRigidTransformation offset;
-      ResetOrigin(target, offset);
-      irtkMatrix mo = offset.GetMatrix();
-      irtkMatrix m = _transformations[inputIndex].GetMatrix();
-      m = m * mo;
-      _transformations[inputIndex].PutMatrix(m);
-
-      irtkGreyImage source = _reconstructed;
-
-      //cout << fixed << "source[" << inputIndex << ":] " << SumImage(source) << endl; 
-
-      registration.SetInput(&target, &source);
-      
-      //cout << fixed << "target[" << inputIndex << ":] " << SumImage(target) << endl; 
-      
-      registration.SetOutput(&_transformations[inputIndex]);
-      
-      //cout << "Transformation: " << inputIndex << endl;
-      //_transformations[inputIndex].Print2();
-
-      registration.GuessParameterSliceToVolume();
-      registration.SetTargetPadding(-1);
-      cout << "Transformation: " << inputIndex << endl;
-      _transformations[inputIndex].Print2();
-      registration.Run();
-      cout << "Transformation: " << inputIndex << endl;
-      _transformations[inputIndex].Print2();
-
-      // [fetalRecontruction] undo the offset
-      mo.Invert();
-      m = _transformations[inputIndex].GetMatrix();
-      
-      //cout << "m: " << inputIndex << endl;
-      //m.Print();
-      
-      m = m * mo;
-      
-      //cout << "m: " << inputIndex << endl;
-      //m.Print();
-      
-
-      _transformations[inputIndex].PutMatrix(m);
-      
-      //cout << "Transformation: " << inputIndex << endl;
-      //_transformations[inputIndex].GetMatrix().Print();
-      //cout << "mo: " << inputIndex << endl;
-      //mo.Print();
-    }
-  }
-
-}
-
 void irtkReconstruction::SliceToVolumeRegistration() {
 
    for (int i = 0; i < (int) _nids.size(); i++) {
@@ -1699,10 +1617,6 @@ void irtkReconstruction::SliceToVolumeRegistration() {
   }
 
   Gather("SliceToVolumeRegistration");
-
-  //
-  //ParallelSliceToVolumeRegistration();
-  
 
   if (_debug) {
     PrintImageSums("[SliceToVolumeRegistration output]");

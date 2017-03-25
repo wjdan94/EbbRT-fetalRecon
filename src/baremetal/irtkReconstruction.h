@@ -75,12 +75,10 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     vector<int> _stackIndex;
     vector<int> _sliceInsideCPU;
     vector<int> _voxelNum;
-    //TODO: delete this since is not being used
     vector<int> _smallSlices;
 
     irtkRealImage _reconstructed;
     irtkRealImage _mask;
-    //TODO: delete this since is not being used
     irtkRealImage _volumeWeights;
 
     vector<irtkRigidTransformation> _transformations;
@@ -93,7 +91,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     vector<irtkRealImage> _simulatedWeights;
 
     vector<SLICECOEFFS> _volcoeffs;
-
 
     // SuperResolution variables
     irtkRealImage _addon;
@@ -174,7 +171,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
         Messenger::NetworkId nid);
 
     // Scale functions
-    
     void ParallelScale();
 
     void Scale();
@@ -182,13 +178,11 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void ReturnFromScale(Messenger::NetworkId nid);
 
     // Superresolution functions
-    
     void ParallelSuperresolution();
 
     void SuperResolution(ebbrt::IOBuf::DataPointer& dp);
 
     void ReturnFromSuperResolution(Messenger::NetworkId nid);
-
 
     // MStep functions
     void ParallelMStep( mStepReturnParameters& parameters);
@@ -199,29 +193,23 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
         Messenger::NetworkId nid);
 
     // RestoreSliceIntensities functions
-
     void RestoreSliceIntensities();
 
     void ReturnFromRestoreSliceIntensities(Messenger::NetworkId nid);
 
     // ScaleVolume functions
-
     struct scaleVolumeParameters ScaleVolume();
     
     void ReturnFromScaleVolume(struct scaleVolumeParameters parameters,
         Messenger::NetworkId nid);
 
-
     // SliceToVolumeRegistration functions
-    
     void ParallelSliceToVolumeRegistration();
     
     void SliceToVolumeRegistration(ebbrt::IOBuf::DataPointer& dp);
     
     void ReturnFromSliceToVolumeRegistration(Messenger::NetworkId nid);
     
-    //
-
     void ReturnFrom(int fn, ebbrt::Messenger::NetworkId frontEndNid);
 
     // Debugging functions
@@ -244,8 +232,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     std::unique_ptr<ebbrt::MutUniqueIOBuf> SerializeTransformations();
     
-    //
-    void ResetOrigin( irtkGreyImage &image, irtkRigidTransformation &transformation);
+    void ResetOrigin(irtkGreyImage &image, irtkRigidTransformation &transformation);
 
     void ResetOrigin(irtkRealImage &image, irtkRigidTransformation &transformation);
 };
@@ -262,11 +249,6 @@ inline double irtkReconstruction::SumImage(irtkRealImage img) {
 }
 
 inline void irtkReconstruction::PrintImageSums(string s) {
-  /*
-     cout << "_externalRegistrationTargetImage: " 
-     << SumImage(_externalRegistrationTargetImage) << endl; 
-     */
-
   cout << fixed << s <<  " _reconstructed: " 
     << SumImage(_reconstructed) << endl;
 

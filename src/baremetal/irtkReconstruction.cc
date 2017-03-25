@@ -1,32 +1,11 @@
 #include "irtkReconstruction.h"
-#include <irtkResampling.h>
 #include <irtkRegistration.h>
 #include <irtkImageRigidRegistration.h>
 #include <irtkImageRigidRegistrationWithPadding.h>
-#include <irtkImageFunction.h>
-#include <irtkTransformation.h>
-//#include <irtkMeanShift.h>
-//#include <irtkCRF.h>
-#include <math.h>
-#include <stdlib.h>
-
-#ifdef BUILD_CPU_ONLY
-#include "utils.h"
-#endif
-
-
-#include <boost/filesystem.hpp>
-using namespace boost::filesystem;
-
-#if HAVE_CULA
-#include <cula.h>
-#endif
-
 
 #pragma GCC diagnostic ignored "-Wsign-compare"
 
 static size_t indexToCPU(size_t i) { return i; }
-ebbrt::SpinLock spinlock;
 
 // This is *IMPORTANT*, it allows the messenger to resolve remote HandleFaults
 EBBRT_PUBLISH_TYPE(, irtkReconstruction);
@@ -292,7 +271,6 @@ void irtkReconstruction::ResetOrigin(
   transformation.PutRotationZ(0);
 }
 
-
 /*
  * CoeffInit functions
  */
@@ -351,15 +329,6 @@ void irtkReconstruction::StoreCoeffInitParameters(
   _delta = parameters.delta;
   _lambda = parameters.lambda;
   _qualityFactor = parameters.qualityFactor;
-  
-  /*
-   * auto nRigidTrans = dp.Get<int>();	
-  //_transformations.resize(nRigidTrans);
-  for(int i = 0; i < nRigidTrans; i++) {
-    DeserializeTransformations(dp, _transformations[i]);
-  }
-  DeserializeSlice(dp, _reconstructed);
-  */
 }
 
 void irtkReconstruction::CoeffInitBootstrap(
@@ -475,13 +444,6 @@ void irtkReconstruction::InitializeEM() {
 void irtkReconstruction::ParallelCoeffInit() {
   PrintImageSums("[CoeffInit input]");
 
-  /*
-   for (int i = 0; i < _slices.size(); i++) {
-    cout << "Transformations: " << i << endl;
-    _transformations[i].Print2(); 
-  }
-  */
-
   for (size_t index = _start; (int) index < _end; ++index) {
 
     bool sliceInside;
@@ -520,9 +482,6 @@ void irtkReconstruction::ParallelCoeffInit() {
     //isotropic voxel size of PSF - derived from resolution of 
     //reconstructed volume
     double size = res / _qualityFactor;
-
-    //cout << "size[" << index << "]: " << size << " res: " << res 
-    //  << " _qualityFactor" << _qualityFactor << endl; 
 
     //number of voxels in each direction
     //the ROI is 2*voxel dimension
@@ -825,12 +784,7 @@ void irtkReconstruction::GaussianReconstruction() {
   int sliceVoxNum;
 
   //clear _reconstructed image
-  //_voxelNum.resize(_slices.size());
   _reconstructed = 0;
-
-  //cout << "Entering ..." << endl;
-  //PrintAttributeVectorSums();
-  //PrintVector(_scaleCPU, "_scaleCPU");
 
   for (inputIndex = _start; inputIndex < _end; ++inputIndex) {
     slice = _slices[inputIndex];
@@ -1584,42 +1538,25 @@ void irtkReconstruction::ParallelSliceToVolumeRegistration() {
       m = m * mo;
       _transformations[inputIndex].PutMatrix(m);
 
-
-      //cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex << " smin: " << smin << endl; 
-      //cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex << " smax: " << smax << endl; 
-      //cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex << " target: " << SumImage(target) << endl; 
-      
-      //cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex << " offset: ";
-      //offset.Print2();
-      //cout << endl; 
-
-
       irtkGreyImage source = _reconstructed;
       registration.SetInput(&target, &source);
-      
       
       registration.SetOutput(&_transformations[inputIndex]);
       registration.GuessParameterSliceToVolume();
       registration.SetTargetPadding(-1);
       
-      cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex << " transformation: ";
+      cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex 
+        << " transformation: ";
       _transformations[inputIndex].Print2();
       cout << endl; 
 
       registration.Run();
       
-      cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex << " transformation: ";
+      cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex 
+        << " transformation: ";
       _transformations[inputIndex].Print2();
       cout << endl;
       
-      
-      //cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex << " target: " << SumImage(target) << endl; 
-      
-      //cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex << " offset: ";
-      //offset.Print2();
-      //cout << endl; 
-      
-
       // [fetalRecontruction] undo the offset
       mo.Invert();
       m = _transformations[inputIndex].GetMatrix();
@@ -1628,7 +1565,6 @@ void irtkReconstruction::ParallelSliceToVolumeRegistration() {
       
     }
   }
-
 }
 
 void irtkReconstruction::SliceToVolumeRegistration(
@@ -1637,28 +1573,8 @@ void irtkReconstruction::SliceToVolumeRegistration(
   int reconSize = dp.Get<int>();
   dp.Get(reconSize*sizeof(double), (uint8_t*)_reconstructed.GetMat());
 
-  /*
-  cout << "Before ParallelSliceToVolumeRegistration" << endl;
-  for (int i = 0; i < _slices.size(); i++) {
-    cout << "Transformations: " << i << endl;
-    _transformations[i].Print2(); 
-  }
-  */
-
   ParallelSliceToVolumeRegistration();
-  
-  /*
-  cout << "After ParallelSliceToVolumeRegistration" << endl;
-
-  for (int i = 0; i < _slices.size(); i++) {
-    cout << "Transformations: " << i << endl;
-    _transformations[i].Print2(); 
-  }
-  */
-
 }
-
-
 
 void irtkReconstruction::ReturnFromSliceToVolumeRegistration(
     Messenger::NetworkId frontEndNid) {
@@ -1675,7 +1591,6 @@ void irtkReconstruction::ReturnFromSliceToVolumeRegistration(
   SendMessage(frontEndNid, std::move(buf));
 }
 /* End of SliceToVolumeRegistration */
-
 
 void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
   auto buf = MakeUniqueIOBuf(sizeof(int));
@@ -1698,7 +1613,8 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         ReturnFrom(COEFF_INIT,nid);
 
         if (_debug) {
-          cout << "[CoeffInit output] _averageVolumeWeight: " << _averageVolumeWeight << endl;
+          cout << "[CoeffInit output] _averageVolumeWeight: " 
+            << _averageVolumeWeight << endl;
           PrintImageSums("[CoeffInit output]");
         }
 
@@ -1791,8 +1707,9 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         ReturnFromSuperResolution(nid);
 
         if (_debug) {
-          cout << fixed << "[SuperResolution output} _addon: " << SumImage(_addon) << endl;
-          cout << fixed << "[SuperResolution output} _confidenceMap: " 
+          cout << fixed << "[SuperResolution output] _addon: " 
+            << SumImage(_addon) << endl;
+          cout << fixed << "[SuperResolution output] _confidenceMap: " 
             << SumImage(_confidenceMap) << endl;
         }
 
