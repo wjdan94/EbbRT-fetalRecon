@@ -21,7 +21,9 @@
 #define RESTORE_SLICE_INTENSITIES 10
 #define SCALE_VOLUME 11
 #define SLICE_TO_VOLUME_REGISTRATION 12
+#define GATHER_TIMERS 13
 
+#include <sys/time.h>
 #include <string>
 #include <vector>
 
@@ -161,5 +163,36 @@ struct scaleVolumeParameters {
   double num;
   double den;
 };
+
+struct timers {
+  float coeffInit;
+  float gaussianReconstruction;
+  float simulateSlices;
+  float initializeRobustStatistics;
+  float eStepI;
+  float eStepII;
+  float eStepIII;
+  float scale;
+  float superResolution;
+  float mStep;
+  float restoreSliceIntensities;
+  float scaleVolume;
+  float sliceToVolumeRegistration;
+  float totalExecutionTime;
+};
+
+inline struct timeval startTimer() {
+  struct timeval start;
+  gettimeofday(&start, NULL);
+  return start;
+}
+
+inline float endTimer(struct timeval start) {
+  struct timeval end;
+  gettimeofday(&end, NULL);
+  float seconds = (end.tv_sec - start.tv_sec) + 
+    ((end.tv_usec - start.tv_usec) / 1000000.0);
+  return seconds;
+}
 
 #endif // end of UTILS_H

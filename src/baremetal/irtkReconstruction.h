@@ -101,6 +101,9 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     irtkRealImage _addon;
     irtkRealImage _confidenceMap;
 
+    // Timer
+    struct timers _executionTimes;
+
   public:
     // Constructor
     irtkReconstruction(ebbrt::EbbId ebbid);
@@ -216,6 +219,11 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void ReturnFromSliceToVolumeRegistration(Messenger::NetworkId nid);
     
     void ReturnFrom(int fn, ebbrt::Messenger::NetworkId frontEndNid);
+
+    // Timers
+    void InitializeTimers();
+
+    void SendTimers(ebbrt::Messenger::NetworkId frontEndNid);
 
     // Debugging functions
     inline double SumImage(irtkRealImage img);

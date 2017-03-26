@@ -67,7 +67,12 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     bool _debug; 
     bool _disableBiasCorr; 
 
+    struct timers _executionTimes;
+    struct timers _backendExecutionTimes;
+
     // Internal parameters
+    ebbrt::Promise<void> _reconstructionDone;
+
     const double _sigmaFactor = 6.28;
     
     irtkRealImage _externalRegistrationTargetImage;
@@ -179,6 +184,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     void AddNid(ebbrt::Messenger::NetworkId nid);
 
     ebbrt::Future<void> WaitPool();
+
+    ebbrt::Future<void> ReconstructionDone();
 
     // Reconstruction functions
     void SetParameters(arguments args);
@@ -329,6 +336,16 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     void ReturnFromSliceToVolumeRegistration(ebbrt::IOBuf::DataPointer & dp);
 
     // Start program execution
+    void ReturnFromGatherTimers(ebbrt::IOBuf::DataPointer & dp);
+
+    void GatherBackendTimers();
+
+    void GatherFrontendTimers();
+
+    void TimeReport(string component, struct timers& t);
+
+    void InitializeTimers(struct timers& t);
+
     void Execute();
 
     // Static Reconstruction functions

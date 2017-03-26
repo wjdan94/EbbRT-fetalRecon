@@ -339,6 +339,9 @@ void eraseInputStackTuner(vector<irtkRealImage> stacks,
 }
 
 void AppMain() {
+
+  auto startTime = startTimer();
+
   int templateNumber = -1;
 
   irtkRealImage* mask;
@@ -396,6 +399,8 @@ void AppMain() {
   // Initialize data structures for EM
   reconstruction->InitializeEM();
 
+  auto initialReconstructionSeconds = endTimer(startTime);
+
   reconstruction->WaitPool().Then(
     [reconstruction](ebbrt::Future<void> f) {
       f.Get();
@@ -405,12 +410,20 @@ void AppMain() {
       });
   });
 
-  /*
-  reconstruction->waitReceive().Then([](ebbrt::Future<void> f) {
+  reconstruction->ReconstructionDone().Then([reconstruction, startTime, 
+      initialReconstructionSeconds](ebbrt::Future<void> f) {
     f.Get();
-    ebbrt::Cpu::Exit(EXIT_SUCCESS);
+
+    auto seconds = endTimer(startTime);
+
+    reconstruction->GatherBackendTimers();
+    reconstruction->GatherFrontendTimers();
+
+    cout << "[Initial reconstruction time] " << initialReconstructionSeconds << endl;
+    cout << "[Total time] " << seconds << endl;
+    //TODO: uncomment this line once everything works.
+    //ebbrt::Cpu::Exit(EXIT_SUCCESS);
   });
-  */
 }
 
 int main(int argc, char **argv) {

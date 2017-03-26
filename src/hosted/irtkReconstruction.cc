@@ -171,6 +171,11 @@ void irtkReconstruction::AddNid(ebbrt::Messenger::NetworkId nid) {
 /*
  * Fetal Reconstruction functions
  */ 
+
+ebbrt::Future<void> irtkReconstruction::ReconstructionDone() {
+  return std::move(_reconstructionDone.GetFuture());
+}
+
 void irtkReconstruction::ReturnFrom() {
   _received++;
   if (_received == _numBackendNodes) {
@@ -323,6 +328,30 @@ void irtkReconstruction::ReturnFromSliceToVolumeRegistration(
   for(int i = start; i < end; i++) {
     deserializeTransformations(dp, _transformations[i]);
   }
+
+  ReturnFrom();
+}
+
+void irtkReconstruction::ReturnFromGatherTimers(
+    ebbrt::IOBuf::DataPointer & dp) {
+  auto times = dp.Get<struct timers>();
+
+  _backendExecutionTimes.coeffInit += times.coeffInit;
+  _backendExecutionTimes.gaussianReconstruction += times.gaussianReconstruction;
+  _backendExecutionTimes.simulateSlices += times.simulateSlices;
+  _backendExecutionTimes.initializeRobustStatistics += 
+    times.initializeRobustStatistics;
+  _backendExecutionTimes.eStepI += times.eStepI;
+  _backendExecutionTimes.eStepII += times.eStepII;
+  _backendExecutionTimes.eStepIII += times.eStepIII;
+  _backendExecutionTimes.scale += times.scale;
+  _backendExecutionTimes.superResolution += times.superResolution;
+  _backendExecutionTimes.mStep += times.mStep;
+  _backendExecutionTimes.restoreSliceIntensities += 
+    times.restoreSliceIntensities;
+  _backendExecutionTimes.scaleVolume += times.scaleVolume;
+  _backendExecutionTimes.sliceToVolumeRegistration += 
+    times.sliceToVolumeRegistration;
 
   ReturnFrom();
 }
@@ -975,10 +1004,120 @@ void irtkReconstruction::MaskVolume() {
     pm++;
     pr++;
   }
+
+  if (_debug)
+    PrintImageSums("[MaskVolume output]");
+}
+
+void irtkReconstruction::InitializeTimers(struct timers& t) {
+  t.coeffInit = 0.0;
+  t.gaussianReconstruction = 0.0;
+  t.simulateSlices = 0.0;
+  t.initializeRobustStatistics = 0.0;
+  t.eStepI = 0.0;
+  t.eStepII = 0.0;
+  t.eStepIII = 0.0;
+  t.scale = 0.0;
+  t.superResolution = 0.0;
+  t.mStep = 0.0;
+  t.restoreSliceIntensities = 0.0;
+  t.scaleVolume = 0.0;
+  t.sliceToVolumeRegistration = 0.0;
+  t.totalExecutionTime = 0.0;
+}
+
+void irtkReconstruction::GatherFrontendTimers() {
+  TimeReport("Frontend", _executionTimes);
+}
+
+void irtkReconstruction::GatherBackendTimers() {
+  InitializeTimers(_backendExecutionTimes);
+  for (int i = 0; i < (int) _numBackendNodes; i++) {
+    auto buf = MakeUniqueIOBuf(sizeof(int));
+    auto dp = buf->GetMutDataPointer();
+
+    dp.Get<int>() = GATHER_TIMERS; 
+
+    _totalBytes += buf->ComputeChainDataLength();
+    SendMessage(_nids[i], std::move(buf));
+  }
+
+  Gather("GatherBackendTimers");
+
+  _backendExecutionTimes.coeffInit = 
+    _backendExecutionTimes.coeffInit / _numBackendNodes;
+  _backendExecutionTimes.gaussianReconstruction = 
+    _backendExecutionTimes.gaussianReconstruction / _numBackendNodes;
+  _backendExecutionTimes.simulateSlices = 
+    _backendExecutionTimes.simulateSlices / _numBackendNodes;
+  _backendExecutionTimes.initializeRobustStatistics = 
+    _backendExecutionTimes.initializeRobustStatistics / _numBackendNodes;
+  _backendExecutionTimes.eStepI = 
+    _backendExecutionTimes.eStepI / _numBackendNodes;
+  _backendExecutionTimes.eStepII = 
+    _backendExecutionTimes.eStepII / _numBackendNodes;
+  _backendExecutionTimes.eStepIII = 
+    _backendExecutionTimes.eStepIII / _numBackendNodes;
+  _backendExecutionTimes.scale = 
+    _backendExecutionTimes.scale / _numBackendNodes;
+  _backendExecutionTimes.superResolution = 
+    _backendExecutionTimes.superResolution / _numBackendNodes;
+  _backendExecutionTimes.mStep = 
+    _backendExecutionTimes.mStep / _numBackendNodes;
+  _backendExecutionTimes.restoreSliceIntensities = 
+    _backendExecutionTimes.restoreSliceIntensities / _numBackendNodes;
+  _backendExecutionTimes.scaleVolume = 
+    _backendExecutionTimes.scaleVolume / _numBackendNodes;
+  _backendExecutionTimes.sliceToVolumeRegistration = 
+    _backendExecutionTimes.sliceToVolumeRegistration / _numBackendNodes;
+
+  TimeReport("Backend average", _backendExecutionTimes);
+}
+
+void irtkReconstruction::TimeReport(string component, struct timers& t) {
+  cout << endl;
+  cout << endl;
+  cout << "[" << component << " time] CoeffInit " 
+    << t.coeffInit << endl;
+  cout << "[" << component << " time] GaussianReconstruction " 
+    << t.gaussianReconstruction << endl;
+  cout << "[" << component << " time] SimulateSlices " 
+    << t.simulateSlices << endl;
+  cout << "[" << component << " time] InitializeRobustStatistics " 
+    << t.initializeRobustStatistics << endl;
+  cout << "[" << component << " time] EStepI " 
+    << t.eStepI << endl;
+  cout << "[" << component << " time] EStepII " 
+    << t.eStepII << endl;
+  cout << "[" << component << " time] EStepIII " 
+    << t.eStepIII << endl;
+  cout << "[" << component << " time] Scale " 
+    << t.scale << endl;
+  cout << "[" << component << " time] SuperResolution " 
+    << t.superResolution << endl;
+  cout << "[" << component << " time] MStep " 
+    << t.mStep << endl;
+  cout << "[" << component << " time] RestoreSliceIntensities " 
+    << t.restoreSliceIntensities << endl;
+  cout << "[" << component << " time] ScaleVolume " 
+    << t.scaleVolume << endl;
+  cout << "[" << component << " time] SliceToVolumeRegistration " 
+    << t.sliceToVolumeRegistration << endl;
+  cout << endl;
+  if (component == "Frontend") {
+    cout << "[Reconstruction loop time] " 
+      << t.totalExecutionTime << endl;
+  }
 }
 
 void irtkReconstruction::Execute() {
+
+  InitializeTimers(_executionTimes);
+
+  auto start = startTimer();
+
   int recIterations;
+
   for (int it = 0; it < _iterations; it++) {
     if (_debug)
       cout << "[Iteration " << it << "] " << endl;
@@ -1023,12 +1162,12 @@ void irtkReconstruction::Execute() {
 
     for (int recIt = 0; recIt < recIterations; recIt++) {
 
-      if (_debug)
+      if (_debug) {
         cout << "[Reconstruction iteration " << recIt << "]" << endl;
-
-      cout << "[Bias input] _intensityMatching: " << _intensityMatching << endl;
-      cout << "[Bias input] _disableBiasCorr: " << _disableBiasCorr << endl;
-      cout << "[Bias input] _sigma: " << _sigma << endl;
+        cout << "[Bias input] _intensityMatching: " << _intensityMatching << endl;
+        cout << "[Bias input] _disableBiasCorr: " << _disableBiasCorr << endl;
+        cout << "[Bias input] _sigma: " << _sigma << endl;
+      }
 
       if (_intensityMatching) {
         if (!_disableBiasCorr) {
@@ -1062,21 +1201,25 @@ void irtkReconstruction::Execute() {
     }
     
     MaskVolume();
-
-    if (_debug) {
-      PrintImageSums("[MaskVolume output]");
-    }
-    // TODO: implement Evaluate()
+    // TODO: Do we need to implement Evaluate()
   }
 
   RestoreSliceIntensities();
 
   ScaleVolume();
+
+  auto seconds = endTimer(start);
+  _executionTimes.totalExecutionTime = seconds;
     
   if (_debug) {
     cout << endl;
     PrintImageSums("[End of outer loop]");
+    cout << "[End of outer loop time] " << seconds << endl;
   }
+
+  _reconstructed.Write(_outputName.c_str());
+
+  _reconstructionDone.SetValue();
 }
 
 struct coeffInitParameters irtkReconstruction::createCoeffInitParameters() {
@@ -1118,6 +1261,8 @@ irtkReconstruction::CreateReconstructionParameters(int start, int end) {
 
 void irtkReconstruction::CoeffInitBootstrap(
     struct coeffInitParameters parameters) {
+  auto startTime = startTimer();
+
   int diff = _slices.size();
   int factor = (int) ceil(diff / (float)(_numBackendNodes));
   int start;
@@ -1148,7 +1293,6 @@ void irtkReconstruction::CoeffInitBootstrap(
         reinterpret_cast<const uint8_t *>(_stackIndex.data()),
         (size_t)(_stackIndex.size() * sizeof(int)));
 
-    // TODO: Try to move this functions to another file
     buf->PrependChain(std::move(serializeSlices(_slices)));
     buf->PrependChain(std::move(serializeImage(_reconstructed)));
     buf->PrependChain(std::move(serializeImage(_mask)));
@@ -1162,12 +1306,18 @@ void irtkReconstruction::CoeffInitBootstrap(
 
   Gather("CoeffInitBootstrap");
 
+  auto seconds = endTimer(startTime);
+  _executionTimes.coeffInit += seconds;
+
   if (_debug) {
     PrintImageSums("[CoeffInit output]");
+    cout << "[CoeffInit time] " << seconds << endl;
   }
 }
 
 void irtkReconstruction::CoeffInit(struct coeffInitParameters parameters) {
+  auto start = startTimer();
+
   for (int i = 0; i < (int) _numBackendNodes; i++) {
     auto buf = MakeUniqueIOBuf((2 * sizeof(int)) + 
         sizeof(struct coeffInitParameters));
@@ -1183,8 +1333,12 @@ void irtkReconstruction::CoeffInit(struct coeffInitParameters parameters) {
 
   Gather("CoeffInit");
 
+  auto seconds = endTimer(start);
+  _executionTimes.coeffInit += seconds;
+
   if (_debug) {
     PrintImageSums("[CoeffInit output]");
+    cout << "[CoeffInit time] " << seconds << endl;
   }
 }
 
@@ -1218,6 +1372,8 @@ void irtkReconstruction::ExcludeSlicesWithOverlap() {
 
 void irtkReconstruction::GaussianReconstruction() {
 
+  auto start = startTimer();
+
   _voxelNum.resize(_slices.size());
   _reconstructed = 0;
   _volumeWeights.Initialize(_reconstructed.GetImageAttributes());
@@ -1238,14 +1394,20 @@ void irtkReconstruction::GaussianReconstruction() {
 
   ExcludeSlicesWithOverlap();
 
+  auto seconds = endTimer(start);
+  _executionTimes.gaussianReconstruction += seconds;
+
   if (_debug) {
     PrintImageSums("[GaussianReconstruction output]");
     cout << fixed << "[GaussianReconstruction output] _volumeWeights: " 
       << SumImage(_volumeWeights) << endl;
+    cout << fixed << "[GaussianReconstruction time] " << seconds << endl;
   }
 }
 
 void irtkReconstruction::SimulateSlices(bool initialize) {
+  auto start = startTimer();
+
   for (int i = 0; i < (int) _nids.size(); i++) {
     auto buf = MakeUniqueIOBuf(2*sizeof(int));
     auto dp = buf->GetMutDataPointer();
@@ -1260,12 +1422,18 @@ void irtkReconstruction::SimulateSlices(bool initialize) {
 
   Gather("SimulateSlices");
 
+  auto seconds = endTimer(start);
+  _executionTimes.simulateSlices += seconds;
+
   if (_debug) {
     PrintImageSums("[SimulateSlices output]");
+    cout << fixed << "[SimulateSlices time] " << seconds << endl;
   }
 }
 
 void irtkReconstruction::MStep(int iteration) {
+
+  auto start = startTimer();
 
   _mSigma = 0.0;
   _mMix = 0.0;
@@ -1292,24 +1460,28 @@ void irtkReconstruction::MStep(int iteration) {
     ebbrt::Cpu::Exit(EXIT_FAILURE);
   }
 
-  if (_sigmaCPU < _step * _step / _sigmaFactor) {
+  if (_sigmaCPU < _step * _step / _sigmaFactor)
     _sigmaCPU = _step * _step / _sigmaFactor;
-  }
 
-  if (iteration > 1) {
+  if (iteration > 1) 
     _mixCPU = _mMix / _mNum;
-  }
 
   _mCPU = 1 / (_mMax - _mMin);
+
+  auto seconds = endTimer(start);
+  _executionTimes.mStep += seconds;
 
   if (_debug) {
     cout << "[MStep output] _sigmaCPU: " << _sigmaCPU << endl;
     cout << "[MStep output] _mixCPU: " << _mixCPU << endl;
     cout << "[MStep output] _mCPU: " << _mCPU << endl;
+    cout << "[MStep time] " << seconds << endl;
   }
 }
 
 void irtkReconstruction::RestoreSliceIntensities() {
+
+  auto start = startTimer();
 
   for (int i = 0; i < (int) _nids.size(); i++) {
     auto buf = MakeUniqueIOBuf(sizeof(int));
@@ -1322,9 +1494,18 @@ void irtkReconstruction::RestoreSliceIntensities() {
   }
 
   Gather("RestoreSliceIntensities");
+
+  auto seconds = endTimer(start);
+  _executionTimes.restoreSliceIntensities += seconds;
+
+  if (_debug)
+    cout << "[RestoreSliceIntensities time] " << seconds << endl;
 }
 
 void irtkReconstruction::ScaleVolume() {
+
+  auto start = startTimer();
+
   _num = 0;
   _den = 0;
 
@@ -1348,8 +1529,12 @@ void irtkReconstruction::ScaleVolume() {
     ptr++;
   }
 
+  auto seconds = endTimer(start);
+  _executionTimes.scaleVolume += seconds;
+
   if (_debug) {
     PrintImageSums("[ScaleVolume output]");
+    cout << "[ScaleVolume time] " << seconds << endl;
   }
 }
 
@@ -1376,6 +1561,8 @@ void irtkReconstruction::SliceToVolumeRegistration() {
 
 void irtkReconstruction::InitializeRobustStatistics() {
 
+  auto start = startTimer();
+
   _sigmaSum = 0;
   _numSum = 0;
 
@@ -1397,6 +1584,9 @@ void irtkReconstruction::InitializeRobustStatistics() {
   _mixSCPU = 0.9;
   _mCPU = 1 / (2.1 * _maxIntensity - 1.9 * _minIntensity);
 
+  auto seconds = endTimer(start);
+  _executionTimes.initializeRobustStatistics += seconds;
+
   if (_debug) {
     PrintImageSums("[InitializeRobustStatistics output]");
     cout << "[InitializeRobustStatistics output] _sigmaCPU: " 
@@ -1407,10 +1597,13 @@ void irtkReconstruction::InitializeRobustStatistics() {
     cout << "[InitializeRobustStatistics output] _mixSCPU: " 
       << _mixSCPU << endl;
     cout << "[InitializeRobustStatistics output] _mCPU: " << _mCPU << endl;
+    cout << "[InitializeRobustStatistics time] " << seconds << endl;
   }
 }
 
 void irtkReconstruction::EStepI() {
+
+  auto start = startTimer();
 
   struct eStepParameters parameters;
 
@@ -1446,15 +1639,6 @@ void irtkReconstruction::EStepI() {
   
   Gather("EStepI");
 
-  if (_debug) {
-    cout << "[EStepI output] _sum: " << _sum << endl;
-    cout << "[EStepI output] _den: " << _den << endl;
-    cout << "[EStepI output] _den2: " << _den2 << endl;
-    cout << "[EStepI output] _sum2: " << _sum2 << endl;
-    cout << "[EStepI output] _maxs: " << _maxs << endl;
-    cout << "[EStepI output] _mins: " << _mins << endl;
-  }
-
   if (_den > 0)
     _meanSCPU = _sum / _den;
   else
@@ -1465,13 +1649,25 @@ void irtkReconstruction::EStepI() {
   else
     _meanS2CPU = (_maxs + _meanSCPU) / 2;
 
+  auto seconds = endTimer(start);
+  _executionTimes.eStepI += seconds;
+
   if (_debug) {
+    cout << "[EStepI output] _sum: " << _sum << endl;
+    cout << "[EStepI output] _den: " << _den << endl;
+    cout << "[EStepI output] _den2: " << _den2 << endl;
+    cout << "[EStepI output] _sum2: " << _sum2 << endl;
+    cout << "[EStepI output] _maxs: " << _maxs << endl;
+    cout << "[EStepI output] _mins: " << _mins << endl;
     cout << "[EStepI output] _meanSCPU: " << _meanSCPU << endl;
     cout << "[EStepI output] _meanS2CPU: " << _meanS2CPU << endl;
+    cout << "[EStepI time] " << seconds << endl;
   }
 }
 
 void irtkReconstruction::EStepII() {
+
+  auto start = startTimer();
 
   _sum = 0.0;
   _den = 0.0;
@@ -1497,13 +1693,6 @@ void irtkReconstruction::EStepII() {
 
   Gather("EStepII");
 
-  if (_debug) {
-    cout << "[EStepII output] _sum: " << _sum << endl;
-    cout << "[EStepII output] _den: " << _den << endl;
-    cout << "[EStepII output] _den2: " << _den2 << endl;
-    cout << "[EStepII output] _sum2: " << _sum2 << endl;
-  }
-
   // [fetalRecontruction] do not allow too small sigma
   if ((_sum > 0) && (_den > 0)) {
     _sigmaSCPU = _sum / _den;
@@ -1523,13 +1712,23 @@ void irtkReconstruction::EStepII() {
       _sigmaS2CPU = _step * _step / _sigmaFactor;
   }
 
+  auto seconds = endTimer(start);
+  _executionTimes.eStepIII += seconds;
+
   if (_debug) {
+    cout << "[EStepII output] _sum: " << _sum << endl;
+    cout << "[EStepII output] _den: " << _den << endl;
+    cout << "[EStepII output] _den2: " << _den2 << endl;
+    cout << "[EStepII output] _sum2: " << _sum2 << endl;
     cout << "[EStepII output] _sigmaSCPU: " << _sigmaSCPU << endl;
     cout << "[EStepII output] _sigmaS2CPU: " << _sigmaS2CPU << endl;
+    cout << "[EStepII time] " << seconds << endl;
   }
 }
 
 void irtkReconstruction::EStepIII() {
+
+  auto start = startTimer();
 
   _sum = 0.0;
   _num = 0.0;
@@ -1562,10 +1761,14 @@ void irtkReconstruction::EStepIII() {
   else
     _mixSCPU = 0.9;
 
+  auto seconds = endTimer(start);
+  _executionTimes.eStepIII += seconds;
+
   if (_debug) {
     cout << "[EStepIII output] _sum: " << _sum << endl;
     cout << "[EStepIII output] _num: " << (int) _num << endl;
     cout << "[EStepIII output] _mixSCPU: " << _mixSCPU << endl;
+    cout << "[EStepIII time] " << seconds << endl;
   }
 }
 
@@ -1578,6 +1781,8 @@ void irtkReconstruction::EStep() {
 }
 
 void irtkReconstruction::Scale() {
+  auto start = startTimer();
+
   for (int i = 0; i < (int) _nids.size(); i++) {
     auto buf = MakeUniqueIOBuf(sizeof(int) + 
         sizeof(struct eStepParameters));
@@ -1590,6 +1795,12 @@ void irtkReconstruction::Scale() {
   }
 
   Gather("Scale");
+
+  auto seconds = endTimer(start);
+  _executionTimes.scale += seconds;
+
+  if (_debug) 
+    cout << "[Scale time] " << seconds << endl;
 }
 
 void irtkReconstruction::AdaptiveRegularization2(vector<irtkRealImage> &_b,
@@ -1766,11 +1977,16 @@ void irtkReconstruction::BiasCorrectVolume(irtkRealImage &original) {
 
 void irtkReconstruction::SuperResolution(int iteration) {
 
-  cout << "[SuperResolution input] iteration: " << iteration << endl;
-  cout << "[SuperResolution input] _alpha: " << _alpha << endl;
-  cout << "[SuperResolution input] _globalBiasCorrection: " << _globalBiasCorrection << endl;
-  cout << "[SuperResolution input] _minIntensity: " << _minIntensity << endl;
-  cout << "[SuperResolution input] _maxIntensity: " << _maxIntensity << endl;
+  auto start = startTimer();
+
+  if (_debug) {
+    cout << "[SuperResolution input] iteration: " << iteration << endl;
+    cout << "[SuperResolution input] _alpha: " << _alpha << endl;
+    cout << "[SuperResolution input] _globalBiasCorrection: " 
+      << _globalBiasCorrection << endl;
+    cout << "[SuperResolution input] _minIntensity: " << _minIntensity << endl;
+    cout << "[SuperResolution input] _maxIntensity: " << _maxIntensity << endl;
+  }
 
   if (iteration == 1) {
     _addon.Initialize(_reconstructed.GetImageAttributes());
@@ -1836,12 +2052,16 @@ void irtkReconstruction::SuperResolution(int iteration) {
     BiasCorrectVolume(original);
   }
 
+  auto seconds = endTimer(start);
+  _executionTimes.superResolution += seconds;
+
   if (_debug) {
     PrintImageSums("[SuperResolution output]");
     cout << fixed << "[SuperResolution output] _addon: " 
       << SumImage(_addon) << endl;
     cout << fixed << "[SuperResolution output] _confidenceMap: " 
       << SumImage(_confidenceMap) << endl;
+    cout << fixed << "[SuperResolution time] " << seconds << endl; 
   }
 }
 
@@ -1964,7 +2184,15 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
         ReturnFromSliceToVolumeRegistration(dp);
         break;
       }
+    case GATHER_TIMERS:
+      {
+        ReturnFromGatherTimers(dp);
+        break;
+      }
     default:
-      cout << "Invalid option" << endl;
+      {
+        cout << "ERROR: ReceiveMessage() invalid option" << endl;
+        ebbrt::Cpu::Exit(EXIT_FAILURE);
+      }
   } 
 }
