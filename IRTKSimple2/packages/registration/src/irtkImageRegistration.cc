@@ -120,28 +120,28 @@ void irtkImageRegistration::Initialize(int level)
 
   // Blur images if necessary
   if (_TargetBlurring[level] > 0) {
-//    //cout << "Blurring target ... ";
-        irtkGaussianBlurringWithPadding<irtkGreyPixel> blurring(_TargetBlurring[level], _TargetPadding);
+//    cout << "Blurring target ... ";
+    irtkGaussianBlurringWithPadding<irtkGreyPixel> blurring(_TargetBlurring[level], _TargetPadding);
     blurring.SetInput (_target);
     blurring.SetOutput(_target);
     blurring.Run();
-//    //cout << "done" << endl;
+//    cout << "done" << endl;
   }
 
   if (_SourceBlurring[level] > 0) {
-    //cout << "Blurring source ... ";
+//    cout << "Blurring source ... ";
     irtkGaussianBlurring<irtkGreyPixel> blurring(_SourceBlurring[level]);
     blurring.SetInput (_source);
     blurring.SetOutput(_source);
     blurring.Run();
-    //cout << "done" << endl;
+//    cout << "done" << endl;
   }
 
   _target->GetPixelSize(&dx, &dy, &dz);
   temp = fabs(_TargetResolution[0][0]-dx) + fabs(_TargetResolution[0][1]-dy) + fabs(_TargetResolution[0][2]-dz);
 
   if (level > 0 || temp > 0.000001) {
-    //cout << "Resampling target ... ";
+  // cout << "Resampling target ... ";
     // Create resampling filter
     irtkResamplingWithPadding<irtkGreyPixel> resample(_TargetResolution[level][0],
         _TargetResolution[level][1],
@@ -157,7 +157,7 @@ void irtkImageRegistration::Initialize(int level)
   temp = fabs(_SourceResolution[0][0]-dx) + fabs(_SourceResolution[0][1]-dy) + fabs(_SourceResolution[0][2]-dz);
 
   if (level > 0 || temp > 0.000001) {
-    //cout << "Resampling source ... ";
+  // cout << "Resampling source ... ";
     // Create resampling filter
     irtkResamplingWithPadding<irtkGreyPixel> resample(_SourceResolution[level][0],
         _SourceResolution[level][1],
@@ -166,7 +166,7 @@ void irtkImageRegistration::Initialize(int level)
     resample.SetInput (_source);
     resample.SetOutput(_source);
     resample.Run();
-    //cout << "done" << endl;
+  // cout << "done" << endl;
   }
 
   // Find out the min and max values in target image, ignoring padding
@@ -319,11 +319,11 @@ void irtkImageRegistration::Initialize(int level)
 //#if 0
   case K:
     // Rescale images by an integer factor if necessary
-      /*target_nbins = irtkCalculateNumberOfBins(_target, _NumberOfBins,
+  /*  target_nbins = irtkCalculateNumberOfBins(_target, _NumberOfBins,
                    target_min, target_max);
     source_nbins = irtkCalculateNumberOfBins(_source, _NumberOfBins,
                    source_min, source_max);
-		   _metric = new irtkKappaSimilarityMetric(target_nbins, source_nbins);*/
+    _metric = new irtkKappaSimilarityMetric(target_nbins, source_nbins);*/
   case NGD:
   case NGP:
   case NGS:
@@ -405,7 +405,7 @@ void irtkImageRegistration::Finalize(int level)
     sim_queue.pop(metric);
     delete metric;
   }
-  #endif*/
+#endif*/
 
   delete tmp_target;
   delete tmp_source;
@@ -507,11 +507,11 @@ void irtkImageRegistration::Run()
 /*#ifdef HAS_TBB
 #if USE_TIMING
     tick_count t_end = tick_count::now();
-//    if (tbb_debug) //cout << this->NameOfClass() << " = " << (t_end - t_start).seconds() << " secs." << endl;
+    if (tbb_debug) cout << this->NameOfClass() << " = " << (t_end - t_start).seconds() << " secs." << endl;
 #endif
     init.terminate();
 
-    #endif*/
+#endif*/
 
     // Do the final cleaning up for this level
     this->Finalize(level);
@@ -777,7 +777,7 @@ bool irtkImageRegistration::Read(char *buffer1, char *buffer2, int &level)
       } else {
         if (strstr(buffer2, "CSpline") != NULL) {
           this->_InterpolationMode = Interpolation_CSpline;
-          //cout << "Interpolation Mode is ... CSpline" << endl;
+          // cout << "Interpolation Mode is ... CSpline" << endl;
           ok = true;
         } else {
           if (strstr(buffer2, "BSpline") != NULL) {
