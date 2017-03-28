@@ -158,7 +158,7 @@ void irtkImageHomogeneousTransformation::Run()
 
 /*#ifdef HAS_TBB
       parallel_for(blocked_range<int>(0, this->_output->GetZ(), 1), irtkMultiThreadedImageHomogeneousTransformation(this, l, t));
-      #else*/
+#else*/
 
     	// Initialize iterator
       iterator.Initialize(this->_output, this->_input);

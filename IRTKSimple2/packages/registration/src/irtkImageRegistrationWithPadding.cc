@@ -58,8 +58,6 @@ void irtkImageRegistrationWithPadding::Initialize(int level)
     //cout << "done" << endl;
   }
 
-  //cout << "t=" << 1 << " z=" << 0 << " y=" << 0 << " x=" << 0 << " : " << _source->Get(1, 0, 0, 0) << endl;
-
   _target->GetPixelSize(&dx, &dy, &dz);
   temp = fabs(_TargetResolution[0][0]-dx) + fabs(_TargetResolution[0][1]-dy) + fabs(_TargetResolution[0][2]-dz);
 
@@ -92,8 +90,6 @@ void irtkImageRegistrationWithPadding::Initialize(int level)
     //cout << "done" << endl;
   }
 
-  //cout << "t=" << 1 << " z=" << 0 << " y=" << 0 << " x=" << 0 << " : " << _source->Get(1, 0, 0, 0) << endl;
-
   // Find out the min and max values in target image, ignoring padding
   target_max = MIN_GREY;
   target_min = MAX_GREY;
@@ -121,11 +117,9 @@ void irtkImageRegistrationWithPadding::Initialize(int level)
     for (k = 0; k < _source->GetZ(); k++) {
       for (j = 0; j < _source->GetY(); j++) {
         for (i = 0; i < _source->GetX(); i++) {
-	    if (_source->Get(i, j, k, t) > _SourcePadding){
+          if (_source->Get(i, j, k, t) > _SourcePadding){
             if (_source->Get(i, j, k, t) > source_max)
-	    {
-		source_max = _source->Get(i, j, k, t); 
-	    }
+              source_max = _source->Get(i, j, k, t);
             if (_source->Get(i, j, k, t) < source_min)
               source_min = _source->Get(i, j, k, t);
 	  } else {
@@ -135,8 +129,6 @@ void irtkImageRegistrationWithPadding::Initialize(int level)
       }
     }
   }
-  
-  //cout << "t=" << 1 << " z=" << 0 << " y=" << 0 << " x=" << 0 << " : " << _source->Get(1, 0, 0, 0) << endl;
 
   // Check whether dynamic range of data is not to large
   if (target_max - target_min > MAX_GREY) {
@@ -158,13 +150,12 @@ void irtkImageRegistrationWithPadding::Initialize(int level)
       }
     }
   }
-  
+
   if (source_max - source_min > MAX_GREY) {
       cerr << this->NameOfClass()
-           << "::Initialize: 2 Dynamic range of source is too large" << " _source_max = " << source_max << "source_min = " << source_min << " MAX_GREY = " << MAX_GREY << endl;
+           << "::Initialize: 2 Dynamic range of source is too large" << endl;
       exit(1);
   } else {
-      //cout << " _source_max = " << source_max << "source_min = " << source_min << " MAX_GREY = " << MAX_GREY << endl;
       for (t = 0; t < _source->GetT(); t++) {
         for (k = 0; k < _source->GetZ(); k++) {
           for (j = 0; j < _source->GetY(); j++) {
@@ -332,7 +323,7 @@ void irtkImageRegistrationWithPadding::Initialize(int level)
 
   // Print some debugging information
   //cout << "Target image (reference)" << endl;
-//  _target->Print();
+  //_target->Print();
   //cout << "Range is from " << target_min << " to " << target_max << endl;
 
   //cout << "Source image (transform)" << endl;

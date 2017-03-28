@@ -173,7 +173,7 @@ ostream& operator<< (ostream& os, const irtkPointSet &pset)
   os.setf(ios::fixed);
   os.precision(10);
   //for (i = 0; i < pset._n; i++) {
-      //os << setw(15) << pset._data[i] << endl;
+    //os << setw(15) << pset._data[i] << endl;
   //}
   os.precision(6);
   os.unsetf(ios::right);
@@ -199,7 +199,7 @@ istream& operator>> (istream& is, irtkPointSet &pset)
 
   // Read irtkPointSet
   for (i = 0; i < size; i++) {
-      //is >> p;
+    //is >> p;
     pset.Add(p);
   }
   return is;

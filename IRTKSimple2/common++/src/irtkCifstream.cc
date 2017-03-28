@@ -48,8 +48,6 @@ void irtkCifstream::Read(char *mem, long start, long num)
 #else
   if (start != -1) fseek(_file, start, SEEK_SET);
   fread(mem, num, 1, _file);
-  //size_t tmp = fread(mem, num, 1, _file);
-  //if(tmp != 1) { exit(-1); }
 #endif
 #endif
 }

@@ -470,7 +470,7 @@ void irtkTemporalRigidTransformation::JacobianDOFs(double jac[3], int dof, doubl
 
 void irtkTemporalRigidTransformation::Print()
 {
-/*
+  /*
   cout.setf(ios::right);
   cout.setf(ios::fixed);
   cout.precision(4);

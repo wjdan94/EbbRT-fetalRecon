@@ -286,7 +286,7 @@ double irtkImageRigidRegistration::Evaluate()
 
 //#ifndef HAS_TBB
   int i, j, k, t;
-//s#endif
+//#endif
 
   // Pointer to reference data
   irtkGreyPixel *ptr2target;
@@ -318,7 +318,7 @@ double irtkImageRigidRegistration::Evaluate()
 /*#ifdef HAS_TBB
   irtkMultiThreadedImageRigidRegistrationEvaluate evaluate(this);
   parallel_reduce(blocked_range<int>(0, _target->GetZ(), 20), evaluate);
-  #else*/
+#else*/
 
   for (t = 0; t < _target->GetT(); t++) {
 

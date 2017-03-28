@@ -1,12 +1,12 @@
 /*=========================================================================
 
-  Library   : Image Registration Toolkit (IRTK)
-  Module    : $Id: irtkResamplingWithPadding.cc 772 2013-03-15 14:46:38Z ws207 $
-  Copyright : Imperial College, Department of Computing
-              Visual Information Processing (VIP), 2008 onwards
-  Date      : $Date: 2013-03-15 14:46:38 +0000 (Fri, 15 Mar 2013) $
-  Version   : $Revision: 772 $
-  Changes   : $Author: ws207 $
+Library   : Image Registration Toolkit (IRTK)
+Module    : $Id: irtkResamplingWithPadding.cc 772 2013-03-15 14:46:38Z ws207 $
+Copyright : Imperial College, Department of Computing
+            Visual Information Processing (VIP), 2008 onwards
+Date      : $Date: 2013-03-15 14:46:38 +0000 (Fri, 15 Mar 2013) $
+Version   : $Revision: 772 $
+Changes   : $Author: ws207 $
 
 =========================================================================*/
 
@@ -19,18 +19,18 @@
 template <class VoxelType> class irtkMultiThreadedResamplingWithPadding
 {
 
-  /// Time frame to transform
-  int _t;
+/// Time frame to transform
+int _t;
 
-  /// Pointer to image transformation class
-  irtkResamplingWithPadding<VoxelType> *_filter;
+/// Pointer to image transformation class
+irtkResamplingWithPadding<VoxelType> *_filter;
 
 public:
 
-  irtkMultiThreadedResamplingWithPadding(irtkResamplingWithPadding<VoxelType> *filter, int t) {
-    _t = t;
-    _filter = filter;
-  }
+irtkMultiThreadedResamplingWithPadding(irtkResamplingWithPadding<VoxelType> *filter, int t) {
+_t = t;
+_filter = filter;
+}
 
   void operator()(const blocked_range<int> &r) const {
     int i, j, k, l, u, v, w, pad;
@@ -255,7 +255,7 @@ void irtkResamplingWithPadding<VoxelType>::Initialize()
 template <class VoxelType> void irtkResamplingWithPadding<VoxelType>::Run()
 {
 //#ifdef HAS_TBB
-    // int l;
+  //int l;
 //#else
   int i, j, k, l, u, v, w, pad;
   double val, sum;
@@ -276,7 +276,7 @@ template <class VoxelType> void irtkResamplingWithPadding<VoxelType>::Run()
 
 /*#ifdef HAS_TBB
     parallel_for(blocked_range<int>(0, this->_output->GetZ(), 1), irtkMultiThreadedResamplingWithPadding<VoxelType>(this, l));
-    #else*/
+#else*/
 
     for (k = 0; k < this->_output->GetZ(); k++) {
       for (j = 0; j < this->_output->GetY(); j++) {
@@ -421,14 +421,14 @@ template <class VoxelType> void irtkResamplingWithPadding<VoxelType>::Run()
 
   }
 
-  /*#ifdef HAS_TBB
+/*#ifdef HAS_TBB
 #if USE_TIMING
   tick_count t_end = tick_count::now();
   if (tbb_debug) cout << this->NameOfClass() << " = " << (t_end - t_start).seconds() << " secs." << endl;
 #endif
   init.terminate();
 
-  #endif*/
+#endif*/
 
   // Do the final cleaning up
   this->Finalize();

@@ -144,7 +144,7 @@ template <class VoxelType> void irtkResampling<VoxelType>::Run()
   this->Initialize();
 
 /*#ifdef HAS_TBB
- task_scheduler_init init(tbb_no_threads);
+task_scheduler_init init(tbb_no_threads);
 #if USE_TIMING
   tick_count t_start = tick_count::now();
 #endif
@@ -154,7 +154,7 @@ template <class VoxelType> void irtkResampling<VoxelType>::Run()
 
 /*#ifdef HAS_TBB
     parallel_for(blocked_range<int>(0, this->_output->GetZ(), 1), irtkMultiThreadedResampling<VoxelType>(this, l));
-    #else*/
+#else*/
 
     for (k = 0; k < this->_output->GetZ(); k++) {
       for (j = 0; j < this->_output->GetY(); j++) {
@@ -180,7 +180,7 @@ template <class VoxelType> void irtkResampling<VoxelType>::Run()
 #endif
   init.terminate();
 
-  #endif*/
+#endif*/
 
   // Do the final cleaning up
   this->Finalize();
