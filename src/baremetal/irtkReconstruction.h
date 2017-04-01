@@ -40,6 +40,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     int _numThreads;
     int _start;
     int _end;
+    int _factor;
 
     double _delta; 
     double _lambda; 
@@ -71,6 +72,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     double _sigmaCPU;
 
     bool _adaptive;
+
+    vector<size_t> _workers;
 
     vector<float> _stackFactor;
 
@@ -120,13 +123,15 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
         std::unique_ptr<ebbrt::IOBuf>&& buffer);
 
     // Reconstruction functions
+    void StoreParameters(struct reconstructionParameters parameters);
+
+    void DefineWorkers();
+
     // CoeffInit functions
     void CoeffInit(ebbrt::IOBuf::DataPointer& dp, size_t cpu);
 
     void ParallelCoeffInit();
     
-    void StoreParameters(struct reconstructionParameters parameters);
-
     void CoeffInitBootstrap(ebbrt::IOBuf::DataPointer& dp, size_t cpu);
     
     void StoreCoeffInitParameters(ebbrt::IOBuf::DataPointer& dp);
