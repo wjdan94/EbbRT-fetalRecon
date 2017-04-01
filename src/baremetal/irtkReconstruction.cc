@@ -10,7 +10,7 @@
 
 #pragma GCC diagnostic ignored "-Wsign-compare"
 
-static size_t indexToCPU(size_t i) { return i; }
+ebbrt::SpinLock spinLock;
 
 // This is *IMPORTANT*, it allows the messenger to resolve remote HandleFaults
 EBBRT_PUBLISH_TYPE(, irtkReconstruction);
@@ -895,92 +895,120 @@ double irtkReconstruction::G(double x, double s) {
 
 void irtkReconstruction::ParallelEStep(
     struct eStepReturnParameters& parameters) {
-  for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
-    irtkRealImage slice = _slices[inputIndex];
-    _weights[inputIndex] = 0;
-    irtkRealImage &b = _bias[inputIndex];
-    double scale = _scaleCPU[inputIndex];
 
-    double num = 0;
-    // [fetalRecontruction] Calculate error, voxel weights, and slice potential
-    for (int i = 0; i < slice.GetX(); i++) {
-      for (int j = 0; j < slice.GetY(); j++) {
-        if (slice(i, j, 0) != -1) {
-          // [fetalRecontruction] bias correct and scale the slice
-          slice(i, j, 0) *= exp(-b(i, j, 0)) * scale;
+  size_t mainCPU = ebbrt::Cpu::GetMine();
+  ebbrt::EventManager::EventContext context;
+  std::atomic<size_t> count(0);
+  static ebbrt::SpinBarrier bar(_workers.size());
 
-          // [fetalRecontruction] number of volumetric voxels to which
-          // [fetalRecontruction] current slice voxel contributes
-          int n = _volcoeffs[inputIndex][i][j].size();
+  for (size_t workerIndex = 0; workerIndex < _workers.size(); workerIndex++) {
 
-          // [fetalRecontruction] if n == 0, slice voxel has no overlap with 
-          // [fetalRecontruction] volumetric ROI, do not process it
+    auto workerId = _workers.at(workerIndex);
 
-          if ((n > 0) &&
-              (_simulatedWeights[inputIndex](i, j, 0) > 0)) {
-            slice(i, j, 0) -=
-              _simulatedSlices[inputIndex](i, j, 0);
+    ebbrt::event_manager->SpawnRemote(
+      [this, &context, &count, mainCPU, workerIndex, &parameters]() {
 
-            // [fetalRecontruction] calculate norm and voxel-wise weights
-            // [fetalRecontruction] Gaussian distribution for inliers
-            // (likelihood)
-            double g = G(slice(i, j, 0), _sigmaCPU);
-            // [fetalRecontruction] Uniform distribution for outliers
-            // (likelihood)
-            double m = M(_mCPU);
+      int start = workerIndex * _factor + _start;
+      int end = start + _factor; 
+      end = end > _end ? _end : end;
 
-            // [fetalRecontruction] voxel_wise posterior
-            double weight = g * _mixCPU / (g * _mixCPU + m * (1 - _mixCPU));
-            _weights[inputIndex](i, j, 0) = weight;
-            // [fetalRecontruction] calculate slice potentials
-            if (_simulatedWeights[inputIndex](i, j, 0) > 0.99) {
-              _slicePotential[inputIndex] += (1.0 - weight) * (1.0 - weight);
-              num++;
+      for (int inputIndex = start; inputIndex < end; inputIndex++) {
+        irtkRealImage slice = _slices[inputIndex];
+        _weights[inputIndex] = 0;
+        irtkRealImage &b = _bias[inputIndex];
+        double scale = _scaleCPU[inputIndex];
+
+        double num = 0;
+        // [fetalRecontruction] Calculate error, voxel weights, and slice potential
+        for (int i = 0; i < slice.GetX(); i++) {
+          for (int j = 0; j < slice.GetY(); j++) {
+            if (slice(i, j, 0) != -1) {
+              // [fetalRecontruction] bias correct and scale the slice
+              slice(i, j, 0) *= exp(-b(i, j, 0)) * scale;
+
+              // [fetalRecontruction] number of volumetric voxels to which
+              // [fetalRecontruction] current slice voxel contributes
+              int n = _volcoeffs[inputIndex][i][j].size();
+
+              // [fetalRecontruction] if n == 0, slice voxel has no overlap with 
+              // [fetalRecontruction] volumetric ROI, do not process it
+
+              if ((n > 0) &&
+                  (_simulatedWeights[inputIndex](i, j, 0) > 0)) {
+                slice(i, j, 0) -=
+                  _simulatedSlices[inputIndex](i, j, 0);
+
+                // [fetalRecontruction] calculate norm and voxel-wise weights
+                // [fetalRecontruction] Gaussian distribution for inliers
+                // (likelihood)
+                double g = G(slice(i, j, 0), _sigmaCPU);
+                // [fetalRecontruction] Uniform distribution for outliers
+                // (likelihood)
+                double m = M(_mCPU);
+
+                // [fetalRecontruction] voxel_wise posterior
+                double weight = g * _mixCPU / (g * _mixCPU + m * (1 - _mixCPU));
+                _weights[inputIndex](i, j, 0) = weight;
+                // [fetalRecontruction] calculate slice potentials
+                if (_simulatedWeights[inputIndex](i, j, 0) > 0.99) {
+                  _slicePotential[inputIndex] += (1.0 - weight) * (1.0 - weight);
+                  num++;
+                }
+              } else {
+                _weights[inputIndex](i, j, 0) = 0;
+              }
             }
-          } else {
-            _weights[inputIndex](i, j, 0) = 0;
           }
         }
+
+        // [fetalRecontruction] evaluate slice potential
+        if (num > 0) {
+          _slicePotential[inputIndex] = sqrt(_slicePotential[inputIndex] / num);
+        } else {
+          // [fetalRecontruction] slice has no unpadded voxels
+          _slicePotential[inputIndex] = -1; 
+        }
+
+        //TODO: Force excluded has to be received in the CoeffInit Step
+        //To force-exclude slices predefined by a user, set their potentials to -1
+        //for (unsigned int i = 0; i < _force_excluded.size(); i++)
+        //  _slicePotential[_force_excluded[i]] = -1;
+
+        for(int i = 0; i < _smallSlices.size(); i++) {
+          _slicePotential[_smallSlices[i]] = -1;
+        }
+
+        if ((_scaleCPU[inputIndex] < 0.2) || (_scaleCPU[inputIndex] > 5)) {
+          _slicePotential[inputIndex] = -1;
+        }
+
+        if (_slicePotential[inputIndex] >= 0) {
+          {
+            std::lock_guard<ebbrt::SpinLock> l(spinLock);
+            // calculate means
+            parameters.sum += _slicePotential[inputIndex] * 
+              _sliceWeightCPU[inputIndex];
+            parameters.den += _sliceWeightCPU[inputIndex];
+            parameters.sum2 += _slicePotential[inputIndex] * 
+              (1 - _sliceWeightCPU[inputIndex]);
+            parameters.den2 += (1 - _sliceWeightCPU[inputIndex]);
+
+            // calculate min and max of potentials in case means need to be initalized
+            if (_slicePotential[inputIndex] > parameters.maxs)
+              parameters.maxs = _slicePotential[inputIndex];
+            if (_slicePotential[inputIndex] < parameters.mins)
+              parameters.mins = _slicePotential[inputIndex];
+          }
+        } 
       }
-    }
-
-    // [fetalRecontruction] evaluate slice potential
-    if (num > 0) {
-      _slicePotential[inputIndex] = sqrt(_slicePotential[inputIndex] / num);
-    } else {
-      // [fetalRecontruction] slice has no unpadded voxels
-      _slicePotential[inputIndex] = -1; 
-    }
-
-    //TODO: Force excluded has to be received in the CoeffInit Step
-    //To force-exclude slices predefined by a user, set their potentials to -1
-    //for (unsigned int i = 0; i < _force_excluded.size(); i++)
-    //  _slicePotential[_force_excluded[i]] = -1;
-
-    for(int i = 0; i < _smallSlices.size(); i++) {
-      _slicePotential[_smallSlices[i]] = -1;
-    }
-
-    if ((_scaleCPU[inputIndex] < 0.2) || (_scaleCPU[inputIndex] > 5)) {
-      _slicePotential[inputIndex] = -1;
-    }
-
-    if (_slicePotential[inputIndex] >= 0) {
-      // calculate means
-      parameters.sum += _slicePotential[inputIndex] * 
-        _sliceWeightCPU[inputIndex];
-      parameters.den += _sliceWeightCPU[inputIndex];
-      parameters.sum2 += _slicePotential[inputIndex] * 
-        (1 - _sliceWeightCPU[inputIndex]);
-      parameters.den2 += (1 - _sliceWeightCPU[inputIndex]);
-
-      // calculate min and max of potentials in case means need to be initalized
-      if (_slicePotential[inputIndex] > parameters.maxs)
-        parameters.maxs = _slicePotential[inputIndex];
-      if (_slicePotential[inputIndex] < parameters.mins)
-        parameters.mins = _slicePotential[inputIndex];
-    } 
+      count++;
+      bar.Wait();
+      while(count < _workers.size()); 
+      if (ebbrt::Cpu::GetMine() == mainCPU)
+        ebbrt::event_manager->ActivateContext(std::move(context));
+    }, workerId);
   }
+  ebbrt::event_manager->SaveContext(context);
 }
 
 void irtkReconstruction::StoreEStepParameters(
