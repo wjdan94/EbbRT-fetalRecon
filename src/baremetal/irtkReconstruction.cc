@@ -310,7 +310,7 @@ void irtkReconstruction::ParallelCoeffInit() {
     auto workerId = _workers.at(workerIndex);
 
     ebbrt::event_manager->SpawnRemote(
-      [this, &context, &count, mainCPU, workerIndex, workerId]() {
+      [this, &context, &count, mainCPU, workerIndex]() {
 
       int start = workerIndex * _factor + _start;
       int end = start + _factor; 
@@ -578,7 +578,6 @@ void irtkReconstruction::ParallelCoeffInit() {
         _volcoeffs[index] = slicecoeffs;
         _sliceInsideCPU[index] = sliceInside;
       }  
-
       count++;
       bar.Wait();
       while(count < _workers.size()); 
@@ -736,53 +735,77 @@ void irtkReconstruction::ReturnFromGaussianReconstruction(
  */
 void irtkReconstruction::ParallelSimulateSlices() {
 
-  for (int inputIndex = _start; inputIndex < _end; ++inputIndex) {
-    _simulatedSlices[inputIndex].Initialize(
-        _slices[inputIndex].GetImageAttributes());
+  size_t mainCPU = ebbrt::Cpu::GetMine();
+  ebbrt::EventManager::EventContext context;
+  std::atomic<size_t> count(0);
+  static ebbrt::SpinBarrier bar(_workers.size());
 
-    _simulatedSlices[inputIndex] = 0;
+  for (size_t workerIndex = 0; workerIndex < _workers.size(); workerIndex++) {
 
-    _simulatedWeights[inputIndex].Initialize(
-        _slices[inputIndex].GetImageAttributes());
+    auto workerId = _workers.at(workerIndex);
 
-    _simulatedWeights[inputIndex] = 0;
+    ebbrt::event_manager->SpawnRemote(
+      [this, &context, &count, mainCPU, workerIndex, workerId]() {
 
-    _simulatedInside[inputIndex].Initialize(
-        _slices[inputIndex].GetImageAttributes());
+      int start = workerIndex * _factor + _start;
+      int end = start + _factor; 
+      end = end > _end ? _end : end;
 
-    _simulatedInside[inputIndex] = 0;
-    _sliceInsideCPU[inputIndex] = 0;
+      for (int inputIndex = start; inputIndex < end; ++inputIndex) {
+        _simulatedSlices[inputIndex].Initialize(
+            _slices[inputIndex].GetImageAttributes());
 
-    POINT3D p;
-    for (unsigned int i = 0; (int) i < _slices[inputIndex].GetX();
-        i++) {
-      for (unsigned int j = 0; (int) j < _slices[inputIndex].GetY();
-          j++) {
-        if (_slices[inputIndex](i, j, 0) != -1) {
-          double weight = 0;
-          int n = _volcoeffs[inputIndex][i][j].size();
+        _simulatedSlices[inputIndex] = 0;
 
-          for (unsigned int k = 0; (int) k < n; k++) {
-            p = _volcoeffs[inputIndex][i][j][k];
+        _simulatedWeights[inputIndex].Initialize(
+            _slices[inputIndex].GetImageAttributes());
 
-            _simulatedSlices[inputIndex](i, j, 0) +=
-              p.value * _reconstructed(p.x, p.y, p.z);
-            weight += p.value;
+        _simulatedWeights[inputIndex] = 0;
 
-            if (_mask(p.x, p.y, p.z) == 1) {
-              _simulatedInside[inputIndex](i, j, 0) = 1;
-              _sliceInsideCPU[inputIndex] = 1;
+        _simulatedInside[inputIndex].Initialize(
+            _slices[inputIndex].GetImageAttributes());
+
+        _simulatedInside[inputIndex] = 0;
+        _sliceInsideCPU[inputIndex] = 0;
+
+        POINT3D p;
+        for (unsigned int i = 0; (int) i < _slices[inputIndex].GetX();
+            i++) {
+          for (unsigned int j = 0; (int) j < _slices[inputIndex].GetY();
+              j++) {
+            if (_slices[inputIndex](i, j, 0) != -1) {
+              double weight = 0;
+              int n = _volcoeffs[inputIndex][i][j].size();
+
+              for (unsigned int k = 0; (int) k < n; k++) {
+                p = _volcoeffs[inputIndex][i][j][k];
+
+                _simulatedSlices[inputIndex](i, j, 0) +=
+                  p.value * _reconstructed(p.x, p.y, p.z);
+                weight += p.value;
+
+                if (_mask(p.x, p.y, p.z) == 1) {
+                  _simulatedInside[inputIndex](i, j, 0) = 1;
+                  _sliceInsideCPU[inputIndex] = 1;
+                }
+              }
+
+              if (weight > 0) {
+                _simulatedSlices[inputIndex](i, j, 0) /= weight;
+                _simulatedWeights[inputIndex](i, j, 0) = weight;
+              }
             }
-          }
-
-          if (weight > 0) {
-            _simulatedSlices[inputIndex](i, j, 0) /= weight;
-            _simulatedWeights[inputIndex](i, j, 0) = weight;
           }
         }
       }
-    }
+      count++;
+      bar.Wait();
+      while(count < _workers.size()); 
+      if (ebbrt::Cpu::GetMine() == mainCPU)
+        ebbrt::event_manager->ActivateContext(std::move(context));
+    }, workerId);
   }
+  ebbrt::event_manager->SaveContext(context);
 }
 
 void irtkReconstruction::SimulateSlices(ebbrt::IOBuf::DataPointer& dp) {
