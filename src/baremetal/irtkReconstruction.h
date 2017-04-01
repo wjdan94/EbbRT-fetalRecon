@@ -54,6 +54,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     int _sigmaBias;
 
+    size_t _IOCPU;
+
     int _directions[13][3];
 
     double _qualityFactor;
@@ -62,7 +64,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     double _sigmaS2CPU;
     double _mixSCPU;
     double _mixCPU;
-    //double _alpha;
     double _maxIntensity;
     double _minIntensity;
     double _averageVolumeWeight;
@@ -120,13 +121,13 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     // Reconstruction functions
     // CoeffInit functions
-    void CoeffInit(ebbrt::IOBuf::DataPointer& dp);
+    void CoeffInit(ebbrt::IOBuf::DataPointer& dp, size_t cpu);
 
     void ParallelCoeffInit();
     
     void StoreParameters(struct reconstructionParameters parameters);
 
-    void CoeffInitBootstrap(ebbrt::IOBuf::DataPointer& dp);
+    void CoeffInitBootstrap(ebbrt::IOBuf::DataPointer& dp, size_t cpu);
     
     void StoreCoeffInitParameters(ebbrt::IOBuf::DataPointer& dp);
 
@@ -183,8 +184,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void Scale();
 
-    void ReturnFromScale(Messenger::NetworkId nid);
-
     // Superresolution functions
     void ParallelSuperresolution();
 
@@ -202,8 +201,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     // RestoreSliceIntensities functions
     void RestoreSliceIntensities();
-
-    void ReturnFromRestoreSliceIntensities(Messenger::NetworkId nid);
 
     // ScaleVolume functions
     struct scaleVolumeParameters ScaleVolume();

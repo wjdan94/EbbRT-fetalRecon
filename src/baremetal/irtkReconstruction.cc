@@ -166,10 +166,12 @@ void irtkReconstruction::StoreCoeffInitParameters(
   _qualityFactor = parameters.qualityFactor;
 }
 
-void irtkReconstruction::CoeffInitBootstrap(
-    ebbrt::IOBuf::DataPointer& dp) {
+void irtkReconstruction::CoeffInitBootstrap(ebbrt::IOBuf::DataPointer& dp, 
+    size_t cpu) {
 
   InitializeTimers();
+
+  _IOCPU = cpu;
 
   auto parameters = dp.Get<struct coeffInitParameters>();
   auto reconstructionParameters = dp.Get<struct reconstructionParameters>();
@@ -546,12 +548,13 @@ void irtkReconstruction::ParallelCoeffInit() {
   }  
 }
 
-void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp) {
+void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp, 
+    size_t cpu) {
 
   bool initialize = dp.Get<int>();
 
   if (initialize)
-    CoeffInitBootstrap(dp);
+    CoeffInitBootstrap(dp, cpu);
   else
     StoreCoeffInitParameters(dp);
   
@@ -662,22 +665,28 @@ void irtkReconstruction::GaussianReconstruction() {
 
 void irtkReconstruction::ReturnFromGaussianReconstruction(
     Messenger::NetworkId frontEndNid) {
-  auto buf = MakeUniqueIOBuf(3 * sizeof(int));
-  auto dp = buf->GetMutDataPointer();
+  
+  ebbrt::event_manager->SpawnRemote(
+      [this,frontEndNid]() {
+ 
+      auto buf = MakeUniqueIOBuf(3 * sizeof(int));
+      auto dp = buf->GetMutDataPointer();
 
-  dp.Get<int>() = GAUSSIAN_RECONSTRUCTION;
-  dp.Get<int>() = _start;
-  dp.Get<int>() = _end;
+      dp.Get<int>() = GAUSSIAN_RECONSTRUCTION;
+      dp.Get<int>() = _start;
+      dp.Get<int>() = _end;
 
-  auto vnum = std::make_unique<StaticIOBuf>(
-      reinterpret_cast<const uint8_t *>(_voxelNum.data() + _start),
-      (size_t)((_end-_start) * sizeof(int)));
+      auto vnum = std::make_unique<StaticIOBuf>(
+        reinterpret_cast<const uint8_t *>(_voxelNum.data() + _start),
+        (size_t)((_end-_start) * sizeof(int)));
 
-  buf->PrependChain(std::move(vnum));
-  buf->PrependChain(std::move(serializeSlice(_reconstructed)));
-  buf->PrependChain(std::move(serializeSlice(_volumeWeights)));
+      buf->PrependChain(std::move(vnum));
+      buf->PrependChain(std::move(serializeSlice(_reconstructed)));
+      buf->PrependChain(std::move(serializeSlice(_volumeWeights)));
 
-  SendMessage(frontEndNid, std::move(buf));
+      SendMessage(frontEndNid, std::move(buf));
+  }, _IOCPU);
+
 }
 /* End of GaussianReconstruction functions */
 
@@ -795,14 +804,17 @@ void irtkReconstruction::InitializeRobustStatistics(double& sigma, int& num) {
 
 void irtkReconstruction::ReturnFromInitializeRobustStatistics(double& sigma, 
     int& num, Messenger::NetworkId frontEndNid) {
-  auto buf = MakeUniqueIOBuf((2 * sizeof(int)) + (1 * sizeof(double)));
-  auto dp = buf->GetMutDataPointer();
+  ebbrt::event_manager->SpawnRemote(
+      [this,frontEndNid, sigma, num]() {
+      auto buf = MakeUniqueIOBuf((2 * sizeof(int)) + (1 * sizeof(double)));
+      auto dp = buf->GetMutDataPointer();
 
-  dp.Get<int>() = INITIALIZE_ROBUST_STATISTICS;
-  dp.Get<int>() = num;
-  dp.Get<double>() = sigma;
+      dp.Get<int>() = INITIALIZE_ROBUST_STATISTICS;
+      dp.Get<int>() = num;
+      dp.Get<double>() = sigma;
 
-  SendMessage(frontEndNid, std::move(buf));
+      SendMessage(frontEndNid, std::move(buf));
+  }, _IOCPU);
 }
 /* End of RobustStatistics functions */
 
@@ -1043,34 +1055,43 @@ struct eStepReturnParameters irtkReconstruction::EStepIII(
 void irtkReconstruction::ReturnFromEStepI(
     struct eStepReturnParameters parameters, Messenger::NetworkId frontEndNid) {
 
-  auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(eStepReturnParameters));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = E_STEP_I;
-  dp.Get<struct eStepReturnParameters>() = parameters;
+  ebbrt::event_manager->SpawnRemote(
+      [this,frontEndNid, parameters]() {
+      auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(eStepReturnParameters));
+      auto dp = buf->GetMutDataPointer();
+      dp.Get<int>() = E_STEP_I;
+      dp.Get<struct eStepReturnParameters>() = parameters;
 
-  SendMessage(frontEndNid, std::move(buf));
+      SendMessage(frontEndNid, std::move(buf));
+  }, _IOCPU);
 }
 
 void irtkReconstruction::ReturnFromEStepII(
     struct eStepReturnParameters parameters, Messenger::NetworkId frontEndNid) {
 
-  auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(eStepReturnParameters));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = E_STEP_II;
-  dp.Get<struct eStepReturnParameters>() = parameters;
+  ebbrt::event_manager->SpawnRemote(
+      [this,frontEndNid, parameters]() {
+      auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(eStepReturnParameters));
+      auto dp = buf->GetMutDataPointer();
+      dp.Get<int>() = E_STEP_II;
+      dp.Get<struct eStepReturnParameters>() = parameters;
 
-  SendMessage(frontEndNid, std::move(buf));
+      SendMessage(frontEndNid, std::move(buf));
+  }, _IOCPU);
 }
 
 void irtkReconstruction::ReturnFromEStepIII(
     struct eStepReturnParameters parameters, Messenger::NetworkId frontEndNid) {
 
-  auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(eStepReturnParameters));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = E_STEP_III;
-  dp.Get<struct eStepReturnParameters>() = parameters;
+  ebbrt::event_manager->SpawnRemote(
+      [this,frontEndNid, parameters]() {
+      auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(eStepReturnParameters));
+      auto dp = buf->GetMutDataPointer();
+      dp.Get<int>() = E_STEP_III;
+      dp.Get<struct eStepReturnParameters>() = parameters;
 
-  SendMessage(frontEndNid, std::move(buf));
+      SendMessage(frontEndNid, std::move(buf));
+  }, _IOCPU);
 }
 /* End of EStep functions */
 
@@ -1116,9 +1137,6 @@ void irtkReconstruction::Scale() {
   ParallelScale();
 }
 
-void irtkReconstruction::ReturnFromScale( Messenger::NetworkId frontEndNid) {
-  ReturnFrom(SCALE, frontEndNid);
-}
 /* End of Scale functions */
 
 /*
@@ -1191,15 +1209,18 @@ void irtkReconstruction::SuperResolution(ebbrt::IOBuf::DataPointer& dp) {
 
 void irtkReconstruction::ReturnFromSuperResolution(
     Messenger::NetworkId frontEndNid) {
-  auto buf = MakeUniqueIOBuf(sizeof(int));
-  auto dp = buf->GetMutDataPointer();
+  ebbrt::event_manager->SpawnRemote(
+      [this,frontEndNid]() {
+      auto buf = MakeUniqueIOBuf(sizeof(int));
+      auto dp = buf->GetMutDataPointer();
   
-  dp.Get<int>() = SUPERRESOLUTION;
+      dp.Get<int>() = SUPERRESOLUTION;
   
-  buf->PrependChain(std::move(serializeSlice(_addon)));
-  buf->PrependChain(std::move(serializeSlice(_confidenceMap)));
+      buf->PrependChain(std::move(serializeSlice(_addon)));
+      buf->PrependChain(std::move(serializeSlice(_confidenceMap)));
 
-  SendMessage(frontEndNid, std::move(buf));
+      SendMessage(frontEndNid, std::move(buf));
+  }, _IOCPU);
 }
 
 /* End of Superresolution */
@@ -1263,11 +1284,15 @@ void irtkReconstruction::MStep(mStepReturnParameters& parameters,
 
 void irtkReconstruction::ReturnFromMStep(mStepReturnParameters& parameters,
     Messenger::NetworkId frontEndNid) {
-  auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(mStepReturnParameters));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = M_STEP;
-  dp.Get<mStepReturnParameters>() = parameters;
-  SendMessage(frontEndNid, std::move(buf));
+
+  ebbrt::event_manager->SpawnRemote(
+      [this,frontEndNid, parameters]() {
+      auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(mStepReturnParameters));
+      auto dp = buf->GetMutDataPointer();
+      dp.Get<int>() = M_STEP;
+      dp.Get<mStepReturnParameters>() = parameters;
+      SendMessage(frontEndNid, std::move(buf));
+  }, _IOCPU);
 }
 /* End of MStep*/
 
@@ -1293,10 +1318,6 @@ void irtkReconstruction::RestoreSliceIntensities() {
   }
 }
 
-void irtkReconstruction::ReturnFromRestoreSliceIntensities(
-    Messenger::NetworkId frontEndNid) {
-  ReturnFrom(RESTORE_SLICE_INTENSITIES, frontEndNid);
-}
 /* End of RestoreSliceIntensities*/
 
 /*
@@ -1333,11 +1354,14 @@ struct scaleVolumeParameters irtkReconstruction::ScaleVolume() {
 void irtkReconstruction::ReturnFromScaleVolume(
     struct scaleVolumeParameters parameters, Messenger::NetworkId frontEndNid) {
   
-  auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(scaleVolumeParameters));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = SCALE_VOLUME;
-  dp.Get<scaleVolumeParameters>() = parameters;
-  SendMessage(frontEndNid, std::move(buf));
+  ebbrt::event_manager->SpawnRemote(
+      [this,frontEndNid, parameters]() {
+      auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(scaleVolumeParameters));
+      auto dp = buf->GetMutDataPointer();
+      dp.Get<int>() = SCALE_VOLUME;
+      dp.Get<scaleVolumeParameters>() = parameters;
+      SendMessage(frontEndNid, std::move(buf));
+  }, _IOCPU);
 
 }
 /* End of ScaleVolume */
@@ -1416,24 +1440,31 @@ void irtkReconstruction::SliceToVolumeRegistration(
 void irtkReconstruction::ReturnFromSliceToVolumeRegistration(
     Messenger::NetworkId frontEndNid) {
   
-  auto buf = MakeUniqueIOBuf(3*sizeof(int));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = SLICE_TO_VOLUME_REGISTRATION;
-  dp.Get<int>() = _start;
-  dp.Get<int>() = _end;
+  ebbrt::event_manager->SpawnRemote(
+      [this,frontEndNid]() {
+      auto buf = MakeUniqueIOBuf(3*sizeof(int));
+      auto dp = buf->GetMutDataPointer();
+      dp.Get<int>() = SLICE_TO_VOLUME_REGISTRATION;
+      dp.Get<int>() = _start;
+      dp.Get<int>() = _end;
 	
 
-  buf->PrependChain(std::move(serializeTransformations(_transformations)));
+      buf->PrependChain(std::move(serializeTransformations(_transformations)));
 
-  SendMessage(frontEndNid, std::move(buf));
+      SendMessage(frontEndNid, std::move(buf));
+  }, _IOCPU);
 }
 /* End of SliceToVolumeRegistration */
 
 void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
-  auto buf = MakeUniqueIOBuf(sizeof(int));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = fn;
-  SendMessage(frontEndNid, std::move(buf));
+
+  ebbrt::event_manager->SpawnRemote(
+        [this,frontEndNid, fn]() {
+        auto buf = MakeUniqueIOBuf(sizeof(int));
+        auto dp = buf->GetMutDataPointer();
+        dp.Get<int>() = fn;
+        SendMessage(frontEndNid, std::move(buf));
+  }, _IOCPU);
 }
 
 void irtkReconstruction::InitializeTimers() {
@@ -1454,254 +1485,267 @@ void irtkReconstruction::InitializeTimers() {
 
 void irtkReconstruction::SendTimers(Messenger::NetworkId frontEndNid) {
   
-  auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(struct timers));
-  auto dp = buf->GetMutDataPointer();
-  dp.Get<int>() = GATHER_TIMERS;
-  dp.Get<struct timers>() = _executionTimes;
+  ebbrt::event_manager->SpawnRemote(
+      [this,frontEndNid]() {
+      auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(struct timers));
+      auto dp = buf->GetMutDataPointer();
+      dp.Get<int>() = GATHER_TIMERS;
+      dp.Get<struct timers>() = _executionTimes;
   
-  SendMessage(frontEndNid, std::move(buf));
+      SendMessage(frontEndNid, std::move(buf));
+  }, _IOCPU);
 }
 
 void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
     std::unique_ptr<IOBuf> &&buffer) {
-  auto dp = buffer->GetDataPointer();
-  auto fn = dp.Get<int>();
+  size_t cpu = ebbrt::Cpu::GetMine();
 
-  cout << "Receiving function: " << fn << endl;
-  switch(fn) {
-    case COEFF_INIT:
-      {
-        auto start = startTimer();
+  ebbrt::kprintf("Received on CPU %u\n", cpu);
+  auto targetCpu = (cpu + 1) % ebbrt::Cpu::Count();
 
-        CoeffInit(dp);
-        ReturnFrom(COEFF_INIT,nid);
+  ebbrt::event_manager->SpawnRemote(
+        [this, buffer = std::move(buffer), nid, cpu]() {
+        
 
-        auto seconds = endTimer(start);
-        _executionTimes.coeffInit += seconds;
+    auto dp = buffer->GetDataPointer();
+    auto fn = dp.Get<int>();
 
-        if (_debug) {
-          cout << "[CoeffInit output] _averageVolumeWeight: " 
-            << _averageVolumeWeight << endl;
-          PrintImageSums("[CoeffInit output]");
-          cout << "[CoeffInit time] " << seconds << endl;
+    cout << "Receiving function: " << fn << " on CPU: " 
+      << ebbrt::Cpu::GetMine() <<  endl;
+    switch(fn) {
+      case COEFF_INIT:
+        {
+          auto start = startTimer();
+
+          CoeffInit(dp, cpu);
+          ReturnFrom(COEFF_INIT, nid);
+          auto seconds = endTimer(start);
+          _executionTimes.coeffInit += seconds;
+
+          if (_debug) {
+            cout << "[CoeffInit output] _averageVolumeWeight: " 
+              << _averageVolumeWeight << endl;
+            PrintImageSums("[CoeffInit output]");
+            cout << "[CoeffInit time] " << seconds << endl;
+          }
+
+          break;
         }
+      case GAUSSIAN_RECONSTRUCTION:
+        {
+          auto start = startTimer();
+          
+          GaussianReconstruction();
+          ReturnFromGaussianReconstruction(nid);
+          
+          auto seconds = endTimer(start);
+          _executionTimes.gaussianReconstruction += seconds;
 
-        break;
-      }
-    case GAUSSIAN_RECONSTRUCTION:
-      {
-        auto start = startTimer();
-        
-        GaussianReconstruction();
-        ReturnFromGaussianReconstruction(nid);
-        
-        auto seconds = endTimer(start);
-        _executionTimes.gaussianReconstruction += seconds;
+          if (_debug) {
+            PrintImageSums("[GaussianReconstruction output]");
+            cout << fixed << "[GaussianReconstruction output] _volumeWeights: " 
+              << SumImage(_volumeWeights) << endl;
+            cout << "[GaussianReconstruction time] " << seconds << endl; 
+          }
 
-        if (_debug) {
-          PrintImageSums("[GaussianReconstruction output]");
-          cout << fixed << "[GaussianReconstruction output] _volumeWeights: " 
-            << SumImage(_volumeWeights) << endl;
-          cout << "[GaussianReconstruction time] " << seconds << endl; 
+          break;
         }
+      case SIMULATE_SLICES:
+        {
+          auto start = startTimer();
 
-        break;
-      }
-    case SIMULATE_SLICES:
-      {
-        auto start = startTimer();
+          SimulateSlices(dp);
+          ReturnFrom(SIMULATE_SLICES, nid);
+          
+          auto seconds = endTimer(start);
+          _executionTimes.simulateSlices += seconds;
 
-        SimulateSlices(dp);
-        ReturnFrom(SIMULATE_SLICES, nid);
-        
-        auto seconds = endTimer(start);
-        _executionTimes.simulateSlices += seconds;
+          if (_debug) {
+            PrintImageSums("[SimulateSlices output]");
+            cout << "[SimulateSlices output] " << seconds << endl;
+          }
 
-        if (_debug) {
-          PrintImageSums("[SimulateSlices output]");
-          cout << "[SimulateSlices output] " << seconds << endl;
+          break;
         }
+      case INITIALIZE_ROBUST_STATISTICS:
+        {
+          
+          auto start = startTimer();
+          
+          double sigma;
+          int num;
+          InitializeRobustStatistics(sigma, num);
+          ReturnFromInitializeRobustStatistics(sigma, num, nid);
+          
+          auto seconds = endTimer(start);
+          _executionTimes.initializeRobustStatistics += seconds;
 
-        break;
-      }
-    case INITIALIZE_ROBUST_STATISTICS:
-      {
-        
-        auto start = startTimer();
-        
-        double sigma;
-        int num;
-        InitializeRobustStatistics(sigma, num);
-        ReturnFromInitializeRobustStatistics(sigma, num, nid);
-        
-        auto seconds = endTimer(start);
-        _executionTimes.initializeRobustStatistics += seconds;
+          if (_debug) {
+            cout << "[InitializeRobustStatistics output] sigma: " << sigma << endl;
+            cout << "[InitializeRobustStatistics output] num: " << num << endl; 
+            cout << "[InitializeRobustStatistics time]  " << seconds << endl; 
+          }
 
-        if (_debug) {
-          cout << "[InitializeRobustStatistics output] sigma: " << sigma << endl;
-          cout << "[InitializeRobustStatistics output] num: " << num << endl; 
-          cout << "[InitializeRobustStatistics time]  " << seconds << endl; 
+          break;
         }
+      case E_STEP_I:
+        {
+          auto start = startTimer();
 
-        break;
-      }
-    case E_STEP_I:
-      {
-        auto start = startTimer();
-
-        auto parameters = EStepI(dp);
-        ReturnFromEStepI(parameters, nid);
-        
-        auto seconds = endTimer(start);
-        _executionTimes.eStepI += seconds;
-        
-        if (_debug)
-          cout << "[EStepI time] " << seconds << endl;
-        
-        break;
-      }
-    case E_STEP_II:
-      {
-        auto start = startTimer();
-        
-        auto parameters = EStepII(dp);
-        ReturnFromEStepII(parameters, nid);
-        
-        auto seconds = endTimer(start);
-        _executionTimes.eStepII += seconds;
-        
-        if (_debug)
-          cout << "[EStepII time] " << seconds << endl;
-        
-        break;
-      }
-    case E_STEP_III:
-      {
-        auto start = startTimer();
-
-        auto parameters = EStepIII(dp);
-        ReturnFromEStepIII(parameters, nid);
-        
-        auto seconds = endTimer(start);
-        _executionTimes.eStepIII += seconds;
-        
-        if (_debug)
-          cout << "[EStepIII time] " << seconds << endl;
-
-        break;
-      }
-    case SCALE:
-      {
-        auto start = startTimer();
-
-        Scale();
-        ReturnFromScale(nid);
-        
-        auto seconds = endTimer(start);
-        _executionTimes.scale += seconds;
-
-        if (_debug) {
-          PrintImageSums("[Scale output]");
-          cout << "[Scale time] " << seconds << endl;
+          auto parameters = EStepI(dp);
+          ReturnFromEStepI(parameters, nid);
+          
+          auto seconds = endTimer(start);
+          _executionTimes.eStepI += seconds;
+          
+          if (_debug)
+            cout << "[EStepI time] " << seconds << endl;
+          
+          break;
         }
-
-        break;
-      }
-    case SUPERRESOLUTION:
-      {
-        auto start = startTimer();
-
-        SuperResolution(dp);
-        ReturnFromSuperResolution(nid);
-        
-        auto seconds = endTimer(start);
-        _executionTimes.superResolution += seconds;
-
-        if (_debug) {
-          cout << fixed << "[SuperResolution output] _addon: " 
-            << SumImage(_addon) << endl;
-          cout << fixed << "[SuperResolution output] _confidenceMap: " 
-            << SumImage(_confidenceMap) << endl;
-          cout << "[SuperResolution time] " << seconds << endl;
+      case E_STEP_II:
+        {
+          auto start = startTimer();
+          
+          auto parameters = EStepII(dp);
+          ReturnFromEStepII(parameters, nid);
+          
+          auto seconds = endTimer(start);
+          _executionTimes.eStepII += seconds;
+          
+          if (_debug)
+            cout << "[EStepII time] " << seconds << endl;
+          
+          break;
         }
+      case E_STEP_III:
+        {
+          auto start = startTimer();
 
-        break;
-      }
-    case M_STEP:
-      {
-        auto start = startTimer();
-        
-        mStepReturnParameters parameters;
-        MStep(parameters, dp);
-        ReturnFromMStep(parameters, nid);
-        
-        auto seconds = endTimer(start);
-        _executionTimes.mStep += seconds;
-        
-        if (_debug) {
-          cout << "[MStep output] sigma: " << parameters.sigma << endl;
-          cout << "[MStep output] mix: " << parameters.mix << endl;
-          cout << "[MStep output] num: " << parameters.num << endl;
-          cout << "[MStep output] min: " << parameters.min << endl;
-          cout << "[MStep output] max: " << parameters.max << endl;
-          cout << "[MStep time] " << seconds << endl;
+          auto parameters = EStepIII(dp);
+          ReturnFromEStepIII(parameters, nid);
+          
+          auto seconds = endTimer(start);
+          _executionTimes.eStepIII += seconds;
+          
+          if (_debug)
+            cout << "[EStepIII time] " << seconds << endl;
+
+          break;
         }
-        break;
-      }
-    case RESTORE_SLICE_INTENSITIES:
-      {
-        auto start = startTimer();
+      case SCALE:
+        {
+          auto start = startTimer();
 
-        RestoreSliceIntensities();
-        ReturnFromRestoreSliceIntensities(nid);
-        
-        auto seconds = endTimer(start);
-        _executionTimes.restoreSliceIntensities += seconds;
-        
-        if (_debug) {
-          cout << "[RestoreSliceIntensities time] " << seconds << endl;
+          Scale();
+          ReturnFrom(SCALE,nid);
+          
+          auto seconds = endTimer(start);
+          _executionTimes.scale += seconds;
+
+          if (_debug) {
+            PrintImageSums("[Scale output]");
+            cout << "[Scale time] " << seconds << endl;
+          }
+
+          break;
         }
-        
-        break;  
-      }
-    case SCALE_VOLUME: 
-      {
-        auto start = startTimer();
+      case SUPERRESOLUTION:
+        {
+          auto start = startTimer();
 
-        auto parameters = ScaleVolume();
-        ReturnFromScaleVolume(parameters, nid);
-        
-        auto seconds = endTimer(start);
-        _executionTimes.scaleVolume += seconds;
-        
-        if (_debug) {
-          cout << "[ScaleVolume time] " << seconds << endl;
+          SuperResolution(dp);
+          ReturnFromSuperResolution(nid);
+          
+          auto seconds = endTimer(start);
+          _executionTimes.superResolution += seconds;
+
+          if (_debug) {
+            cout << fixed << "[SuperResolution output] _addon: " 
+              << SumImage(_addon) << endl;
+            cout << fixed << "[SuperResolution output] _confidenceMap: " 
+              << SumImage(_confidenceMap) << endl;
+            cout << "[SuperResolution time] " << seconds << endl;
+          }
+
+          break;
         }
-
-        break;
-      }
-    case SLICE_TO_VOLUME_REGISTRATION:
-      {
-        auto start = startTimer();
-
-        SliceToVolumeRegistration(dp);
-        ReturnFromSliceToVolumeRegistration(nid);
-        
-        auto seconds = endTimer(start);
-        _executionTimes.sliceToVolumeRegistration += seconds;
-        
-        if (_debug) {
-          cout << "[SliceToVolumeRegistration time] " << seconds << endl;
+      case M_STEP:
+        {
+          auto start = startTimer();
+          
+          mStepReturnParameters parameters;
+          MStep(parameters, dp);
+          ReturnFromMStep(parameters, nid);
+          
+          auto seconds = endTimer(start);
+          _executionTimes.mStep += seconds;
+          
+          if (_debug) {
+            cout << "[MStep output] sigma: " << parameters.sigma << endl;
+            cout << "[MStep output] mix: " << parameters.mix << endl;
+            cout << "[MStep output] num: " << parameters.num << endl;
+            cout << "[MStep output] min: " << parameters.min << endl;
+            cout << "[MStep output] max: " << parameters.max << endl;
+            cout << "[MStep time] " << seconds << endl;
+          }
+          break;
         }
-       
-        break;
-      }
-    case GATHER_TIMERS:
-      {
-        SendTimers(nid);
-        break;
-      }
-    default:
-      cout << "Invalid option" << endl;
-  }
+      case RESTORE_SLICE_INTENSITIES:
+        {
+          auto start = startTimer();
+
+          RestoreSliceIntensities();
+          ReturnFrom(RESTORE_SLICE_INTENSITIES,nid);
+          
+          auto seconds = endTimer(start);
+          _executionTimes.restoreSliceIntensities += seconds;
+          
+          if (_debug) {
+            cout << "[RestoreSliceIntensities time] " << seconds << endl;
+          }
+          
+          break;  
+        }
+      case SCALE_VOLUME: 
+        {
+          auto start = startTimer();
+
+          auto parameters = ScaleVolume();
+          ReturnFromScaleVolume(parameters, nid);
+          
+          auto seconds = endTimer(start);
+          _executionTimes.scaleVolume += seconds;
+          
+          if (_debug) {
+            cout << "[ScaleVolume time] " << seconds << endl;
+          }
+
+          break;
+        }
+      case SLICE_TO_VOLUME_REGISTRATION:
+        {
+          auto start = startTimer();
+
+          SliceToVolumeRegistration(dp);
+          ReturnFromSliceToVolumeRegistration(nid);
+          
+          auto seconds = endTimer(start);
+          _executionTimes.sliceToVolumeRegistration += seconds;
+          
+          if (_debug) {
+            cout << "[SliceToVolumeRegistration time] " << seconds << endl;
+          }
+         
+          break;
+        }
+      case GATHER_TIMERS:
+        {
+          SendTimers(nid);
+          break;
+        }
+      default:
+        cout << "Invalid option" << endl;
+    }
+        }, targetCpu); // End of SpawnRemote
 }
