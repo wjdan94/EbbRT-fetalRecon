@@ -1261,49 +1261,89 @@ void irtkReconstruction::Scale() {
  */
 
 void irtkReconstruction::ParallelSuperresolution() {
-  for (int inputIndex = _start; inputIndex < _end; ++inputIndex) {
-    // [fetalReconstruction] read the current slice
-    irtkRealImage slice = _slices[inputIndex];
+  
+  size_t mainCPU = ebbrt::Cpu::GetMine();
+  ebbrt::EventManager::EventContext context;
+  std::atomic<size_t> count(0);
+  static ebbrt::SpinBarrier bar(_workers.size());
 
-    // [fetalReconstruction] read the current weight image
-    irtkRealImage &w = _weights[inputIndex];
+  for (size_t workerIndex = 0; workerIndex < _workers.size(); workerIndex++) {
 
-    // [fetalReconstruction] read the current bias image
-    irtkRealImage &b = _bias[inputIndex];
-
-    // [fetalReconstruction] identify scale factor
-    double scale = _scaleCPU[inputIndex];
+    auto workerId = _workers.at(workerIndex);
+    
+    ebbrt::event_manager->SpawnRemote(
+      [this, &context, &count, mainCPU, workerIndex]() {
       
-    // [fetalReconstruction] Update reconstructed volume using current slice
-    // [fetalReconstruction] Distribute error to the volume
-    POINT3D p;
-    for (int i = 0; i < slice.GetX(); i++) {
-      for (int j = 0; j < slice.GetY(); j++) {
-        if (slice(i, j, 0) != -1) {
-          // [fetalReconstruction] bias correct and scale the slice
-          slice(i, j, 0) *= exp(-b(i, j, 0)) * scale;
+      int start = workerIndex * _factor + _start;
+      int end = start + _factor; 
+      end = end > _end ? _end : end;
 
-          if (_simulatedSlices[inputIndex](i, j, 0) > 0)
-            slice(i, j, 0) -=
-              _simulatedSlices[inputIndex](i, j, 0);
-          else
-            slice(i, j, 0) = 0;
+      irtkRealImage addon;
+      irtkRealImage confidenceMap;
 
-          int n = _volcoeffs[inputIndex][i][j].size();
-          for (int k = 0; k < n; k++) {
-            p = _volcoeffs[inputIndex][i][j][k];
-            _addon(p.x, p.y, p.z) +=
-              p.value * slice(i, j, 0) * w(i, j, 0) *
-              _sliceWeightCPU[inputIndex];
-            _confidenceMap(p.x, p.y, p.z) +=
-              p.value * w(i, j, 0) *
-              _sliceWeightCPU[inputIndex];
+      addon.Initialize(_reconstructed.GetImageAttributes());
+      confidenceMap.Initialize(_reconstructed.GetImageAttributes());
+
+      addon = 0;
+      confidenceMap = 0;
+
+      for (int inputIndex = start; inputIndex < end; ++inputIndex) {
+        // [fetalReconstruction] read the current slice
+        irtkRealImage slice = _slices[inputIndex];
+
+        // [fetalReconstruction] read the current weight image
+        irtkRealImage &w = _weights[inputIndex];
+
+        // [fetalReconstruction] read the current bias image
+        irtkRealImage &b = _bias[inputIndex];
+
+        // [fetalReconstruction] identify scale factor
+        double scale = _scaleCPU[inputIndex];
+
+        // [fetalReconstruction] Update reconstructed volume using current slice
+        // [fetalReconstruction] Distribute error to the volume
+        POINT3D p;
+        for (int i = 0; i < slice.GetX(); i++) {
+          for (int j = 0; j < slice.GetY(); j++) {
+            if (slice(i, j, 0) != -1) {
+              // [fetalReconstruction] bias correct and scale the slice
+              slice(i, j, 0) *= exp(-b(i, j, 0)) * scale;
+
+              if (_simulatedSlices[inputIndex](i, j, 0) > 0)
+                slice(i, j, 0) -= _simulatedSlices[inputIndex](i, j, 0);
+              else
+                slice(i, j, 0) = 0;
+
+              int n = _volcoeffs[inputIndex][i][j].size();
+              for (int k = 0; k < n; k++) {
+                p = _volcoeffs[inputIndex][i][j][k];
+                addon(p.x, p.y, p.z) += p.value * slice(i, j, 0) * w(i, j, 0) *
+                  _sliceWeightCPU[inputIndex];
+                confidenceMap(p.x, p.y, p.z) += p.value * w(i, j, 0) *
+                  _sliceWeightCPU[inputIndex];
+              }
+            }
           }
         }
       }
-    }
-  }
+      
+      {
+        std::lock_guard<ebbrt::SpinLock> l(spinLock);
+        _addon += addon;
+        _confidenceMap += confidenceMap;
+      }
 
+      count++;
+      bar.Wait();
+      while(count < _workers.size()); 
+
+      
+    if (ebbrt::Cpu::GetMine() == mainCPU)
+        ebbrt::event_manager->ActivateContext(std::move(context));
+
+    }, workerId);
+  }
+  ebbrt::event_manager->SaveContext(context);
 }
 
 void irtkReconstruction::SuperResolution(ebbrt::IOBuf::DataPointer& dp) {
