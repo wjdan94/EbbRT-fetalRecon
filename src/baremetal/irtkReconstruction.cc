@@ -1191,38 +1191,63 @@ void irtkReconstruction::ReturnFromEStepIII(
  * Scale functions 
  */
 void irtkReconstruction::ParallelScale() {
-  for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
-    // [fetalRecontruction] alias the current slice
-    irtkRealImage &slice = _slices[inputIndex];
 
-    // [fetalRecontruction] alias the current weight image
-    irtkRealImage &w = _weights[inputIndex];
+  size_t mainCPU = ebbrt::Cpu::GetMine();
+  ebbrt::EventManager::EventContext context;
+  std::atomic<size_t> count(0);
+  static ebbrt::SpinBarrier bar(_workers.size());
 
-    // [fetalRecontruction] alias the current bias image
-    irtkRealImage &b = _bias[inputIndex];
+  for (size_t workerIndex = 0; workerIndex < _workers.size(); workerIndex++) {
 
-    // [fetalRecontruction] initialise calculation of scale
-    double scalenum = 0;
-    double scaleden = 0;
+    auto workerId = _workers.at(workerIndex);
+    
+    ebbrt::event_manager->SpawnRemote(
+      [this, &context, &count, mainCPU, workerIndex]() {
 
-    for (int i = 0; i < slice.GetX(); i++)
-      for (int j = 0; j < slice.GetY(); j++)
-        if (slice(i, j, 0) != -1) {
-          if (_simulatedWeights[inputIndex](i, j, 0) > 0.99) {
-            // [fetalRecontruction] scale - intensity matching
-            double eb = exp(-b(i, j, 0));
-            scalenum += w(i, j, 0) * slice(i, j, 0) * eb *
-                        _simulatedSlices[inputIndex](i, j, 0);
-            scaleden += w(i, j, 0) * slice(i, j, 0) * eb * slice(i, j, 0) * eb;
-          }
-        }
+      int start = workerIndex * _factor + _start;
+      int end = start + _factor; 
+      end = end > _end ? _end : end;
 
-    // [fetalRecontruction] calculate scale for this slice
-    if (scaleden > 0)
-      _scaleCPU[inputIndex] = scalenum / scaleden;
-    else
-      _scaleCPU[inputIndex] = 1;
+      for (int inputIndex = start; inputIndex < end; inputIndex++) {
+        // [fetalRecontruction] alias the current slice
+        irtkRealImage &slice = _slices[inputIndex];
+
+        // [fetalRecontruction] alias the current weight image
+        irtkRealImage &w = _weights[inputIndex];
+
+        // [fetalRecontruction] alias the current bias image
+        irtkRealImage &b = _bias[inputIndex];
+
+        // [fetalRecontruction] initialise calculation of scale
+        double scalenum = 0;
+        double scaleden = 0;
+
+        for (int i = 0; i < slice.GetX(); i++)
+          for (int j = 0; j < slice.GetY(); j++)
+            if (slice(i, j, 0) != -1) {
+              if (_simulatedWeights[inputIndex](i, j, 0) > 0.99) {
+                // [fetalRecontruction] scale - intensity matching
+                double eb = exp(-b(i, j, 0));
+                scalenum += w(i, j, 0) * slice(i, j, 0) * eb *
+                  _simulatedSlices[inputIndex](i, j, 0);
+                scaleden += w(i, j, 0) * slice(i, j, 0) * eb * slice(i, j, 0) * eb;
+              }
+            }
+
+        // [fetalRecontruction] calculate scale for this slice
+        if (scaleden > 0)
+          _scaleCPU[inputIndex] = scalenum / scaleden;
+        else
+          _scaleCPU[inputIndex] = 1;
+      }
+      count++;
+      bar.Wait();
+      while(count < _workers.size()); 
+      if (ebbrt::Cpu::GetMine() == mainCPU)
+        ebbrt::event_manager->ActivateContext(std::move(context));
+    }, workerId);
   }
+  ebbrt::event_manager->SaveContext(context);
 }
 
 void irtkReconstruction::Scale() {
