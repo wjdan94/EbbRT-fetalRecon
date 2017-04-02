@@ -1403,6 +1403,12 @@ void irtkReconstruction::ParallelMStep(mStepReturnParameters& parameters) {
       int start = workerIndex * _factor + _start;
       int end = start + _factor; 
       end = end > _end ? _end : end;
+
+      double sigma = 0;
+      double mix = 0;
+      double min = 0;
+      double max = 0;
+      int num = 0;
     
       for (int inputIndex = start; inputIndex < end; ++inputIndex) {
 
@@ -1425,28 +1431,37 @@ void irtkReconstruction::ParallelMStep(mStepReturnParameters& parameters) {
               // [fetalReconstruction] otherwise the error has no meaning - 
               // [fetalReconstruction] it is equal to slice intensity
               if (_simulatedWeights[inputIndex](i, j, 0) > 0.99) {
-                {
-                  std::lock_guard<ebbrt::SpinLock> l(spinLock);
 
-                  slice(i, j, 0) -=
-                    _simulatedSlices[inputIndex](i, j, 0);
+                slice(i, j, 0) -= _simulatedSlices[inputIndex](i, j, 0);
 
-                  double e = slice(i, j, 0);
-                  parameters.sigma += e * e * w(i, j, 0);
-                  parameters. mix += w(i, j, 0);
+                double e = slice(i, j, 0);
+                sigma += e * e * w(i, j, 0);
+                mix += w(i, j, 0);
 
-                  if (e < parameters.min)
-                    parameters. min = e;
-                  if (e > parameters.max)
-                    parameters.max = e;
+                if (e < min)
+                  min = e;
+                if (e > max)
+                  max = e;
 
-                  parameters.num++;
-                }
+                num++;
               }
             }
           }
         }
       } 
+
+      {
+        
+        std::lock_guard<ebbrt::SpinLock> l(spinLock);
+        parameters.sigma += sigma;
+        parameters.mix += mix;
+        parameters.num += num;
+        if (min < parameters.min)
+          parameters.min = min;
+        if (max > parameters.max)
+          parameters.max = max;
+      }
+
       count++;
       bar.Wait();
       while(count < _workers.size()); 
