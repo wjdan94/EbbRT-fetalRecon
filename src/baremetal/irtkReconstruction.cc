@@ -912,6 +912,13 @@ void irtkReconstruction::ParallelEStep(
       int end = start + _factor; 
       end = end > _end ? _end : end;
 
+      double sum = 0;
+      double den = 0;
+      double sum2 = 0;
+      double den2 = 0;
+      double maxs = 0;
+      double mins = 1;
+
       for (int inputIndex = start; inputIndex < end; inputIndex++) {
         irtkRealImage slice = _slices[inputIndex];
         _weights[inputIndex] = 0;
@@ -983,23 +990,32 @@ void irtkReconstruction::ParallelEStep(
         }
 
         if (_slicePotential[inputIndex] >= 0) {
-          {
-            std::lock_guard<ebbrt::SpinLock> l(spinLock);
-            // calculate means
-            parameters.sum += _slicePotential[inputIndex] * 
-              _sliceWeightCPU[inputIndex];
-            parameters.den += _sliceWeightCPU[inputIndex];
-            parameters.sum2 += _slicePotential[inputIndex] * 
-              (1 - _sliceWeightCPU[inputIndex]);
-            parameters.den2 += (1 - _sliceWeightCPU[inputIndex]);
+          // calculate means
+          sum += _slicePotential[inputIndex] * _sliceWeightCPU[inputIndex];
+          den += _sliceWeightCPU[inputIndex];
+          sum2 += _slicePotential[inputIndex] * 
+            (1 - _sliceWeightCPU[inputIndex]);
+          den2 += (1 - _sliceWeightCPU[inputIndex]);
 
-            // calculate min and max of potentials in case means need to be initalized
-            if (_slicePotential[inputIndex] > parameters.maxs)
-              parameters.maxs = _slicePotential[inputIndex];
-            if (_slicePotential[inputIndex] < parameters.mins)
-              parameters.mins = _slicePotential[inputIndex];
-          }
+          // calculate min and max of potentials in case means need to be initalized
+          if (_slicePotential[inputIndex] > maxs)
+            maxs = _slicePotential[inputIndex];
+          if (_slicePotential[inputIndex] < mins)
+            mins = _slicePotential[inputIndex];
         } 
+      }
+
+      {
+        std::lock_guard<ebbrt::SpinLock> l(spinLock);
+        parameters.sum += sum;
+        parameters.den += den;
+        parameters.sum2 += sum2;
+        parameters.den2 += den2;
+        if (mins < parameters.mins)
+          parameters.mins = mins;
+        if (maxs > parameters.maxs)
+          parameters.maxs = maxs;
+      
       }
       count++;
       bar.Wait();
