@@ -1321,46 +1321,75 @@ void irtkReconstruction::ReturnFromSuperResolution(
  * MStep functions
  */
 void irtkReconstruction::ParallelMStep(mStepReturnParameters& parameters) {
-  for (int inputIndex = _start; inputIndex < _end; ++inputIndex) {
+  
+  size_t mainCPU = ebbrt::Cpu::GetMine();
+  ebbrt::EventManager::EventContext context;
+  std::atomic<size_t> count(0);
+  static ebbrt::SpinBarrier bar(_workers.size());
+
+
+  for (size_t workerIndex = 0; workerIndex < _workers.size(); workerIndex++) {
     
-    irtkRealImage slice = _slices[inputIndex];
+    auto workerId = _workers.at(workerIndex);
+    
+    ebbrt::event_manager->SpawnRemote(
+      [this, &context, &count, mainCPU, workerIndex, workerId, &parameters]() {
+      
+      int start = workerIndex * _factor + _start;
+      int end = start + _factor; 
+      end = end > _end ? _end : end;
+    
+      for (int inputIndex = start; inputIndex < end; ++inputIndex) {
 
-    irtkRealImage &w = _weights[inputIndex];
+        irtkRealImage slice = _slices[inputIndex];
 
-    irtkRealImage &b = _bias[inputIndex];
+        irtkRealImage &w = _weights[inputIndex];
 
-    // [fetalReconstruction] identify scale factor
-    double scale = _scaleCPU[inputIndex];
+        irtkRealImage &b = _bias[inputIndex];
 
-    // [fetalReconstruction] calculate error
-    for (int i = 0; i < slice.GetX(); i++) {
-      for (int j = 0; j < slice.GetY(); j++) {
-        if (slice(i, j, 0) != -1) {
-          // [fetalReconstruction] bias correct and scale the slice
-          slice(i, j, 0) *= exp(-b(i, j, 0)) * scale;
+        // [fetalReconstruction] identify scale factor
+        double scale = _scaleCPU[inputIndex];
 
-          // [fetalReconstruction] otherwise the error has no meaning - 
-          // [fetalReconstruction] it is equal to slice intensity
-          if (_simulatedWeights[inputIndex](i, j, 0) > 0.99) {
+        // [fetalReconstruction] calculate error
+        for (int i = 0; i < slice.GetX(); i++) {
+          for (int j = 0; j < slice.GetY(); j++) {
+            if (slice(i, j, 0) != -1) {
+              // [fetalReconstruction] bias correct and scale the slice
+              slice(i, j, 0) *= exp(-b(i, j, 0)) * scale;
 
-            slice(i, j, 0) -=
-                _simulatedSlices[inputIndex](i, j, 0);
+              // [fetalReconstruction] otherwise the error has no meaning - 
+              // [fetalReconstruction] it is equal to slice intensity
+              if (_simulatedWeights[inputIndex](i, j, 0) > 0.99) {
+                {
+                  std::lock_guard<ebbrt::SpinLock> l(spinLock);
 
-            double e = slice(i, j, 0);
-            parameters.sigma += e * e * w(i, j, 0);
-            parameters. mix += w(i, j, 0);
+                  slice(i, j, 0) -=
+                    _simulatedSlices[inputIndex](i, j, 0);
 
-            if (e < parameters.min)
-             parameters. min = e;
-            if (e > parameters.max)
-              parameters.max = e;
+                  double e = slice(i, j, 0);
+                  parameters.sigma += e * e * w(i, j, 0);
+                  parameters. mix += w(i, j, 0);
 
-            parameters.num++;
+                  if (e < parameters.min)
+                    parameters. min = e;
+                  if (e > parameters.max)
+                    parameters.max = e;
+
+                  parameters.num++;
+                }
+              }
+            }
           }
         }
-      }
-    }
-  } 
+      } 
+      count++;
+      bar.Wait();
+      while(count < _workers.size()); 
+      if (ebbrt::Cpu::GetMine() == mainCPU)
+        ebbrt::event_manager->ActivateContext(std::move(context));
+      }, workerId);
+  }
+  ebbrt::event_manager->SaveContext(context);
 }
 
 void irtkReconstruction::MStep(mStepReturnParameters& parameters,
