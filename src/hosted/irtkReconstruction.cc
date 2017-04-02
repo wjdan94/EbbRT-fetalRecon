@@ -248,7 +248,7 @@ void irtkReconstruction::ReturnFromEStepI(ebbrt::IOBuf::DataPointer & dp) {
   _den2 += parameters.den2;
   _sum2 += parameters.sum2;
   _maxs = (_maxs > parameters.maxs) ? _maxs : parameters.maxs;
-  _mins= (_mins < parameters.maxs) ? _mins : parameters.mins;
+  _mins = (_mins < parameters.mins) ? _mins : parameters.mins;
   
   ReturnFrom();
 }
