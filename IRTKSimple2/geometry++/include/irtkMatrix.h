@@ -79,7 +79,7 @@ class irtkMatrix : public irtkObject
     };
     
 protected:
-  
+
   /// Number of rows
   int _rows;
 
@@ -141,15 +141,14 @@ public:
 
   /// Returns number of columns
   int Cols() const;
-  
+
   double* GetMatrix();
-  
   /// Puts matrix value
   void   Put(int, int, double);
 
   /// Gets matrix value
   double Get(int, int) const;
-  
+
   //
   // Operators for matrix access
   //
@@ -346,7 +345,6 @@ public:
 #endif
 };
 
-
 //
 // Access operators
 //
@@ -363,18 +361,6 @@ inline int irtkMatrix::Cols() const
 
 inline double* irtkMatrix::GetMatrix()
 {
-    /*double *tmp = new double[_rows*_cols];
-    int i, j;
-    
-    for(i=0;i<_rows;i++)
-    {
-	for(j=0;j<_cols;j++)
-	{
-	    tmp[i*_cols+j] =  _matrix[i][j];
-	}
-    }
-    
-    return tmp;*/
     return _matrix.getMat();
 }
 
@@ -384,9 +370,9 @@ inline void irtkMatrix::Put(int rows, int cols, double matrix)
   _matrix[cols][rows] = matrix;
 #else
   if ((rows >= 0) && (rows < _rows) && (cols >= 0) && (cols < _cols)) {
-      _matrix[cols][rows] = matrix;
+    _matrix[cols][rows] = matrix;
   } else {
-      cout << "irtkMatrix::Put: parameter out of range\n";
+    cout << "irtkMatrix::Put: parameter out of range\n";
   }
 #endif
 }
@@ -397,12 +383,12 @@ inline double irtkMatrix::Get(int rows, int cols) const
   return _matrix[cols][rows];
 #else
   if ((rows >= 0) && (rows < _rows) && (cols >= 0) && (cols < _cols)) {
-      return (double)_matrix[cols][rows];
+    return (double)_matrix[cols][rows];
   } else {
-      cout << "irtkMatrix::Get: parameter out of range\n";
+    cout << "irtkMatrix::Get: parameter out of range\n";
     return 0;
   }
-#endif  
+#endif
 }
 
 inline double &irtkMatrix::operator()(int rows, int cols)
@@ -413,7 +399,7 @@ inline double &irtkMatrix::operator()(int rows, int cols)
   if ((rows >= 0) && (rows < _rows) && (cols >= 0) && (cols < _cols)) {
     return _matrix[cols][rows];
   } else {
-      cout << "irtkMatrix::operator(): parameter out of range\n";
+    cout << "irtkMatrix::operator(): parameter out of range\n";
     return _matrix[0][0];
   }
 #endif
@@ -427,7 +413,7 @@ inline double irtkMatrix::operator()(int rows, int cols) const
   if ((rows >= 0) && (rows < _rows) && (cols >= 0) && (cols < _cols)) {
     return _matrix[cols][rows];
   } else {
-      cout << "irtkMatrix::operator(): parameter out of range\n";
+    cout << "irtkMatrix::operator(): parameter out of range\n";
     return 0;
   }
 #endif

@@ -44,14 +44,13 @@ class irtkImageRegistration : public irtkRegistration
   friend class irtkMultiThreadedImageRigidRegistrationWithPaddingEvaluate;
   friend class irtkMultiThreadedImageRigidRegistrationEvaluate2D;
 
-  #endif*/
+#endif*/
 
   /// Interface to input file stream
   friend istream& operator>> (istream&, irtkImageRegistration*);
 
   /// Interface to output file stream
   friend ostream& operator<< (ostream&, const irtkImageRegistration*);
-
 
 public:
 
@@ -144,6 +143,8 @@ public:
 
   /// Final set up for the registration at a multiresolution level
   virtual void Finalize(int);
+
+public:
 
   /// Classification
   irtkEMClassification *classification;
