@@ -298,8 +298,6 @@ void irtkReconstruction::InitializeEM() {
 }
 
 void irtkReconstruction::ParallelCoeffInit() {
-  PrintImageSums("[CoeffInit input]");
-
   size_t mainCPU = ebbrt::Cpu::GetMine();
   ebbrt::EventManager::EventContext context;
   std::atomic<size_t> count(0);
@@ -1099,13 +1097,15 @@ struct eStepReturnParameters irtkReconstruction::EStepIII(
   double den = parameters.den;
   double mixSCPU = parameters.mixSCPU;
 
-  cout << "[EStepIII input] _meanSCPU: " << meanSCPU << endl; 
-  cout << "[EStepIII input] _meanS2CPU: " << meanS2CPU << endl; 
-  cout << "[EStepIII input] _mixSCPU: " << mixSCPU << endl; 
-  cout << "[EStepIII input] _sigmaSCPU: " << sigmaSCPU << endl; 
-  cout << "[EStepIII input] _sigmaS2CPU: " << sigmaS2CPU << endl; 
-  cout << "[EStepIII input] _den: " << den << endl; 
-  PrintImageSums("[EStepIII input]");
+  if (_debug) {
+    cout << "[EStepIII input] _meanSCPU: " << meanSCPU << endl; 
+    cout << "[EStepIII input] _meanS2CPU: " << meanS2CPU << endl; 
+    cout << "[EStepIII input] _mixSCPU: " << mixSCPU << endl; 
+    cout << "[EStepIII input] _sigmaSCPU: " << sigmaSCPU << endl; 
+    cout << "[EStepIII input] _sigmaS2CPU: " << sigmaS2CPU << endl; 
+    cout << "[EStepIII input] _den: " << den << endl; 
+    PrintImageSums("[EStepIII input]");
+  }
 
   struct eStepReturnParameters returnParameters;
   returnParameters.sum = 0;
@@ -1623,17 +1623,21 @@ void irtkReconstruction::ParallelSliceToVolumeRegistration() {
       registration.GuessParameterSliceToVolume();
       registration.SetTargetPadding(-1);
       
-      cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex 
-        << " transformation: ";
-      _transformations[inputIndex].Print2();
-      cout << endl; 
+      if (_debug) {
+        cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex 
+          << " transformation: ";
+        _transformations[inputIndex].Print2();
+        cout << endl;
+      }
 
       registration.Run();
       
-      cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex 
-        << " transformation: ";
-      _transformations[inputIndex].Print2();
-      cout << endl;
+      if (_debug) {
+        cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex 
+          << " transformation: ";
+        _transformations[inputIndex].Print2();
+        cout << endl;
+      }
       
       // [fetalRecontruction] undo the offset
       mo.Invert();
@@ -1717,18 +1721,18 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
     std::unique_ptr<IOBuf> &&buffer) {
   size_t cpu = ebbrt::Cpu::GetMine();
 
-  ebbrt::kprintf("Received on CPU %u\n", cpu);
   auto targetCpu = (cpu + 1) % ebbrt::Cpu::Count();
 
   ebbrt::event_manager->SpawnRemote(
-        [this, buffer = std::move(buffer), nid, cpu]() {
-        
+    [this, buffer = std::move(buffer), nid, cpu]() {
 
     auto dp = buffer->GetDataPointer();
     auto fn = dp.Get<int>();
 
-    cout << "Receiving function: " << fn << " on CPU: " 
-      << ebbrt::Cpu::GetMine() <<  endl;
+    if (_debug) {
+      cout << "Receiving function: " << fn << " on CPU: " 
+        << ebbrt::Cpu::GetMine() <<  endl;
+    }
     switch(fn) {
       case COEFF_INIT:
         {
@@ -1918,9 +1922,8 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
           auto seconds = endTimer(start);
           _executionTimes.restoreSliceIntensities += seconds;
           
-          if (_debug) {
+          if (_debug)
             cout << "[RestoreSliceIntensities time] " << seconds << endl;
-          }
           
           break;  
         }
@@ -1934,9 +1937,8 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
           auto seconds = endTimer(start);
           _executionTimes.scaleVolume += seconds;
           
-          if (_debug) {
+          if (_debug)
             cout << "[ScaleVolume time] " << seconds << endl;
-          }
 
           break;
         }
@@ -1950,9 +1952,8 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
           auto seconds = endTimer(start);
           _executionTimes.sliceToVolumeRegistration += seconds;
           
-          if (_debug) {
+          if (_debug)
             cout << "[SliceToVolumeRegistration time] " << seconds << endl;
-          }
          
           break;
         }
@@ -1964,5 +1965,5 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
       default:
         cout << "Invalid option" << endl;
     }
-        }, targetCpu); // End of SpawnRemote
+  }, targetCpu); // End of SpawnRemote
 }
