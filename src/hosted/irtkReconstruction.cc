@@ -1713,7 +1713,7 @@ void irtkReconstruction::EStepII() {
   }
 
   auto seconds = endTimer(start);
-  _executionTimes.eStepIII += seconds;
+  _executionTimes.eStepII += seconds;
 
   if (_debug) {
     cout << "[EStepII output] _sum: " << _sum << endl;
