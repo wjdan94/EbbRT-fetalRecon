@@ -5,7 +5,7 @@
 * Build and install EbbRT hosted library, assume installed at `~/sysroot/hosted`
 
 ## Working with Docker Swarm
-* Install docker and set-up weave this can be done by executing the saltscripts
+Install docker and set-up weave this can be done by executing the saltscripts
 ```
 $ salt <minion_id> state.apply docker.swarm
 ```
@@ -77,7 +77,6 @@ Node Allocation Details:
 | img: /root/multithread/EbbRT-fetalRecon/./build/bm/reconstruction.elf32
 |  id: ebbrt-0.26885.0
 |  ip: 10.32.0.4
-ERRO[0000] error getting events from daemon: unexpected EOF
 Docker Container:
 |  img: ebbrt/kvm-qemu:latest
 |  cid: 083fe422bfd7
