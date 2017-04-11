@@ -311,7 +311,7 @@ bool irtkQuaternionTransformation::IsIdentity()
 
 int irtkQuaternionTransformation::CheckHeader(char* pFileName)
 {
-    /*gzFile inputFile = gzopen(pFileName, "rb");
+  /*gzFile inputFile = gzopen(pFileName, "rb");
 
   if (inputFile == NULL) {
     std::stringstream mesg;

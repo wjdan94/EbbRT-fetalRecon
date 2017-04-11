@@ -35,7 +35,7 @@ template <class VoxelType> class irtkImageToImage : public irtkObject
 
   friend class irtkMultiThreadedImageToImage<VoxelType>;
 
-  #endif*/
+#endif*/
 
 private:
 

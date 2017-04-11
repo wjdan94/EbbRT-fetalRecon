@@ -950,7 +950,7 @@ void irtkSymmetricImageRegistration::Write(ostream &to)
     case ClosedForm:
       to << "Optimization method               = ClosedForm" << endl;
       break;
-  default:
+    default:
       break;
   }
 

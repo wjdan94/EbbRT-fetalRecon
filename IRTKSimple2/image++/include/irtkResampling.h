@@ -40,7 +40,7 @@ template <class VoxelType> class irtkResampling : public irtkImageToImage<VoxelT
 
   friend class irtkMultiThreadedResampling<VoxelType>;
 
-  #endif*/
+#endif*/
 
 protected:
 

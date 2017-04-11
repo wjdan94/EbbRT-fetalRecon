@@ -89,7 +89,6 @@ irtkMatrix::irtkMatrix(int rows, int cols, std::unique_ptr<double[]> mat)
     _rows = rows;
     _cols = cols;
     _matrix = Matrix(rows, cols, std::move(mat));
-    
 }
 
 irtkMatrix::irtkMatrix(const irtkMatrix& m) : irtkObject(m)
@@ -207,24 +206,24 @@ irtkMatrix& irtkMatrix::operator-=(const irtkMatrix& m)
 
 irtkMatrix& irtkMatrix::operator+=(const irtkMatrix& m)
 {
-    int i, j;
+  int i, j;
 
-    if ((_rows != m._rows) || (_cols != m._cols)) {
-	cerr << "irtkMatrix::operator+=: Size mismatch" << endl;
-	exit(1);
+  if ((_rows != m._rows) || (_cols != m._cols)) {
+    cerr << "irtkMatrix::operator+=: Size mismatch" << endl;
+    exit(1);
+  }
+  for (j = 0; j < _cols; j++) {
+    for (i = 0; i < _rows; i++) {
+      _matrix[j][i] += m._matrix[j][i];
     }
-    for (j = 0; j < _cols; j++) {
-	for (i = 0; i < _rows; i++) {
-	    _matrix[j][i] += m._matrix[j][i];
-	}
-    }
-    return *this;
+  }
+  return *this;
 }
 
 irtkMatrix& irtkMatrix::operator*=(const irtkMatrix& m)
 {
-    *this = *this * m;
-    return *this;
+  *this = *this * m;
+  return *this;
 }
 
 irtkMatrix  irtkMatrix::operator- (const irtkMatrix& m)
@@ -517,20 +516,20 @@ irtkMatrix FrechetMean (irtkMatrix *matrices, double *weights, int number, int i
 
 irtkMatrix irtkMatrix::operator~ (void)
 {
-    irtkMatrix m;
+  irtkMatrix m;
 
-    m = *this;
-    m.Transpose();
-    return m;
+  m = *this;
+  m.Transpose();
+  return m;
 }
 
 irtkMatrix irtkMatrix::operator! (void)
 {
-    irtkMatrix m;
+  irtkMatrix m;
 
-    m = *this;
-    m.Invert();
-    return m;
+  m = *this;
+  m.Invert();
+  return m;
 }
 
 double irtkMatrix::Det() const

@@ -77,7 +77,7 @@ void irtkPadding(irtkRealImage &image, irtkRealPixel padding, irtkGreyImage *res
 
         // Print some padding information
 //        cout << "Padding value = " << padding << endl;
-	//      cout << "Padding ratio = " << 100*double(n)/(double(m)+double(n)) << " %" << endl;
+//        cout << "Padding ratio = " << 100*double(n)/(double(m)+double(n)) << " %" << endl;
 
         // Calculate distances
         for (t = 0; t < image.GetT(); t++) {
@@ -128,8 +128,8 @@ void irtkPadding(irtkGreyImage &image, irtkGreyPixel padding)
     if (n > 0) {
 
         // Print some padding information
-//        cout << "Padding value = " << padding << endl;
-	//      cout << "Padding ratio = " << 100*double(n)/(double(m)+double(n)) << " %" << endl;
+//      cout << "Padding value = " << padding << endl;
+//      cout << "Padding ratio = " << 100*double(n)/(double(m)+double(n)) << " %" << endl;
 
         // Calculate distances
         for (t = 0; t < image.GetT(); t++) {
@@ -454,7 +454,7 @@ int irtkCalculateNumberOfBins(irtkGreyImage *image, int maxbin, int min, int max
 
         // Print out number of bins
 //        cout << "Using " << nbins << " out of " << maxbin << " bin(s) with width "
-	//          << width << endl;
+//          << width << endl;
     } else {
         // Print out number of bins
 //        cout << "Using " << nbins << " bin(s) with width " 	 << width << endl;

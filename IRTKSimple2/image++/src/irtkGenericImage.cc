@@ -1,12 +1,12 @@
 /*=========================================================================
 
-  Library   : Image Registration Toolkit (IRTK)
-  Module    : $Id: irtkGenericImage.cc 968 2013-08-15 08:48:21Z kpk09 $
-  Copyright : Imperial College, Department of Computing
-              Visual Information Processing (VIP), 2008 onwards
-  Date      : $Date: 2013-08-15 09:48:21 +0100 (Thu, 15 Aug 2013) $
-  Version   : $Revision: 968 $
-  Changes   : $Author: kpk09 $
+Library   : Image Registration Toolkit (IRTK)
+Module    : $Id: irtkGenericImage.cc 968 2013-08-15 08:48:21Z kpk09 $
+Copyright : Imperial College, Department of Computing
+            Visual Information Processing (VIP), 2008 onwards
+Date      : $Date: 2013-08-15 09:48:21 +0100 (Thu, 15 Aug 2013) $
+Version   : $Revision: 968 $
+Changes   : $Author: kpk09 $
 
 =========================================================================*/
 
@@ -69,7 +69,6 @@ irtkGenericImage<VoxelType>::irtkGenericImage(const irtkImageAttributes &attr, V
     
     // Initialize data
     _matrix = NULL;
-    
     _attr = attr;
     
     _matrix = std::move(ptr);
@@ -80,15 +79,14 @@ irtkGenericImage<VoxelType>::irtkGenericImage(const irtkImageAttributes &attr, V
     
     // Initialize base class
     this->irtkBaseImage::Update(attr);
-    
+
     // Initialize rest of class
     //this->Initialize(attr, ptr);
 }
 
-
 template <class VoxelType>
 irtkGenericImage<VoxelType>::irtkGenericImage(const irtkGenericImage &image)
-    : irtkBaseImage() {
+  : irtkBaseImage() {
   int i, n;
   VoxelType *ptr1, *ptr2;
 
@@ -131,13 +129,11 @@ irtkGenericImage<VoxelType>::irtkGenericImage(
 template <class VoxelType>
 irtkGenericImage<VoxelType>::~irtkGenericImage(void) {
   if (_matrix != NULL) {
-
 #ifdef _1D_
-      delete[] _matrix;
+    delete[] _matrix;
 #else
-      Deallocate<VoxelType>(_matrix);
+    Deallocate<VoxelType>(_matrix);
 #endif
-
     _matrix = NULL;
   }
   _attr._x = 0;
@@ -183,29 +179,27 @@ void irtkGenericImage<VoxelType>::Initialize(const irtkImageAttributes &attr) {
   // Free memory
   if ((_attr._x != attr._x) || (_attr._y != attr._y) || (_attr._z != attr._z) ||
       (_attr._t != attr._t)) {
+    // Free old memory
+    if (_matrix != NULL) {
+#ifdef _1D_
+      delete[] _matrix;
+#else
+      Deallocate<VoxelType>(_matrix);
+#endif
+    }
 
-      // Free old memory
-      if (_matrix != NULL) {
+    // Allocate new memory
+    if (attr._x * attr._y * attr._z * attr._t > 0) {
 #ifdef _1D_
-	  delete[] _matrix;
+      _matrix = new VoxelType[attr._x * attr._y * attr._z * attr._t];
 #else
-	  Deallocate<VoxelType>(_matrix);
+      _matrix = Allocate(_matrix, attr._x, attr._y, attr._z, attr._t);
 #endif
-      }
-      
-      // Allocate new memory
-      if (attr._x * attr._y * attr._z * attr._t > 0) {
-#ifdef _1D_
-	  _matrix = new VoxelType[attr._x * attr._y * attr._z * attr._t];
-#else
-	  _matrix = Allocate(_matrix, attr._x, attr._y, attr._z, attr._t);
-#endif
-	  
-      } else {
-	  _matrix = NULL;
-      }
+    } else {
+      _matrix = NULL;
+    }
   }
-  
+
   // Initialize base class
   this->irtkBaseImage::Update(attr);
 
@@ -213,38 +207,20 @@ void irtkGenericImage<VoxelType>::Initialize(const irtkImageAttributes &attr) {
   *this = VoxelType();
 }
 
-/*template <class VoxelType>
-void irtkGenericImage<VoxelType>::Initialize(const irtkImageAttributes &attr, VoxelType ptr[], irtkMatrix matI2W, irtkMatrix matW2I) {
-    
-    _attr = attr;
-    
-    _matrix = ptr;
-    
-    _matI2W = std::move(matI2W);
-    
-    _matW2I = matW2I;
-    
-    // Initialize base class
-    this->irtkBaseImage::Update(attr);
-    }*/
-
-
-template <class VoxelType> void irtkGenericImage<VoxelType>::Clear() 
-{
-    // Free memory
-    if (_matrix != NULL) {
+template <class VoxelType> void irtkGenericImage<VoxelType>::Clear() {
+  // Free memory
+  if (_matrix != NULL) {
 #ifdef _1D_
-	delete[] _matrix;
+    delete[] _matrix;
 #else
-	Deallocate<VoxelType>(_matrix);
+    Deallocate<VoxelType>(_matrix);
 #endif
-    }
-	_attr._x = 0;
-	_attr._y = 0;
-	_attr._z = 0;
-	_attr._t = 0;
+  }
+  _attr._x = 0;
+  _attr._y = 0;
+  _attr._z = 0;
+  _attr._t = 0;
 }
-	
 template <class VoxelType>
 void irtkGenericImage<VoxelType>::Read(const char *filename) {
   irtkBaseImage *image;
@@ -341,7 +317,7 @@ void irtkGenericImage<VoxelType>::Write(const char *filename) {
 
 template <class VoxelType>
 void irtkGenericImage<VoxelType>::GetMinMax(VoxelType *min,
-                                            VoxelType *max) const {
+    VoxelType *max) const {
   int i, n;
   VoxelType *ptr;
 
@@ -421,8 +397,8 @@ VoxelType irtkGenericImage<VoxelType>::GetSD(int toggle) const {
 }
 
 template <class VoxelType>
-void irtkGenericImage<VoxelType>::GetMaxPosition(irtkPoint &p, int ds,
-                                                 int) const {
+void irtkGenericImage<VoxelType>::GetMaxPosition(irtkPoint& p,
+    int ds, int) const {
   double i, j, k;
   VoxelType *ptr;
   double x, y, z;
@@ -453,10 +429,10 @@ void irtkGenericImage<VoxelType>::GetMaxPosition(irtkPoint &p, int ds,
 }
 
 template <class VoxelType>
-void irtkGenericImage<VoxelType>::GravityCenter(irtkPoint &p, int ds,
-                                                int t) const {
+void irtkGenericImage<VoxelType>::GravityCenter(irtkPoint& p, int ds,
+    int t) const {
   double i, j, k;
-  // VoxelType *ptr = new VoxelType;
+  //VoxelType *ptr = new VoxelType;
   VoxelType *ptr;
   double x, y, z;
   double si, sj, sk;
@@ -502,7 +478,7 @@ void irtkGenericImage<VoxelType>::GravityCenter(irtkPoint &p, int ds,
 
 template <class VoxelType>
 void irtkGenericImage<VoxelType>::GetMinMaxPad(VoxelType *min, VoxelType *max,
-                                               VoxelType pad) const {
+    VoxelType pad) const {
   int i, n;
   VoxelType *ptr;
   bool first = true;
@@ -544,7 +520,8 @@ void irtkGenericImage<VoxelType>::PutMinMax(VoxelType min, VoxelType max) {
   ptr = this->GetPointerToVoxels();
   for (i = 0; i < n; i++) {
     ptr[i] = VoxelType(
-        ((ptr[i] - min_val) / double(max_val - min_val)) * (max - min) + min);
+        ((ptr[i] - min_val) / double(max_val - min_val)) *
+        (max - min) + min);
   }
 }
 
@@ -555,7 +532,7 @@ void irtkGenericImage<VoxelType>::Saturate(double q0, double q1) {
   if ((q0 < 0) || (q1 > 1)) {
     stringstream msg;
     msg << "irtkGenericImage<VoxelType>::Saturate: Parameter out of range 0.0 "
-           "- 1.0\n";
+      "- 1.0\n";
     cerr << msg.str();
     throw irtkException(msg.str(), __FILE__, __LINE__);
   }
@@ -627,9 +604,9 @@ irtkGenericImage<VoxelType>::GetRegion(int k, int m) const {
   for (j = 0; j < _attr._y; j++) {
     for (i = 0; i < _attr._x; i++) {
 #ifdef _1D_
-	image._matrix[TO1D(0, 0, j, i, attr._t, attr._z, attr._y, attr._x)] = _matrix[TO1D(m, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
+      image._matrix[TO1D(0, 0, j, i, attr._t, attr._z, attr._y, attr._x)] = _matrix[TO1D(m, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
 #else
-	image._matrix[0][0][j][i] = _matrix[m][k][j][i];
+      image._matrix[0][0][j][i] = _matrix[m][k][j][i];
 #endif
     }
   }
@@ -657,11 +634,11 @@ irtkGenericImage<VoxelType> irtkGenericImage<VoxelType>::GetFrame(int l) const {
     for (j = 0; j < _attr._y; j++) {
       for (i = 0; i < _attr._x; i++) {
 #ifdef _1D_
-	  image._matrix[TO1D(0, k, j, i, attr._t, attr._z, attr._y, attr._x)] =
-	      _matrix[TO1D(l, k, j, i, _attr._t, _attr._z, _attr._y,
-			   _attr._x)];
+        image._matrix[TO1D(0, k, j, i, attr._t, attr._z, attr._y, attr._x)] =
+          _matrix[TO1D(l, k, j, i, _attr._t, _attr._z, _attr._y,
+              _attr._x)];
 #else
-	  image._matrix[0][k][j][i] = _matrix[l][k][j][i];
+        image._matrix[0][k][j][i] = _matrix[l][k][j][i];
 #endif
       }
     }
@@ -672,16 +649,14 @@ irtkGenericImage<VoxelType> irtkGenericImage<VoxelType>::GetFrame(int l) const {
 template <class VoxelType>
 irtkGenericImage<VoxelType>
 irtkGenericImage<VoxelType>::GetRegion(int i1, int j1, int k1, int i2, int j2,
-                                       int k2) const {
+    int k2) const {
   int i, j, k, l;
   double x1, y1, z1, x2, y2, z2;
 
-  /*cout << "GetRegion" << endl;
-  
-    cout << "Region of interest is " << i1 << " " << j1 << " " << k1 << " " << i2 << " " << j2 << " " << k2 << endl;*/
-  
-  if ((i1 < 0) || (i1 >= i2) || (j1 < 0) || (j1 >= j2) || (k1 < 0) ||
-      (k1 >= k2) || (i2 > _attr._x) || (j2 > _attr._y) || (k2 > _attr._z)) {
+  if ((i1 < 0) || (i1 >= i2) ||
+      (j1 < 0) || (j1 >= j2) ||
+      (k1 < 0) || (k1 >= k2) ||
+      (i2 > _attr._x) || (j2 > _attr._y) || (k2 > _attr._z)) {
     stringstream msg;
     msg << "irtkGenericImage<VoxelType>::GetRegion: Parameter out of range\n";
     cerr << msg.str();
@@ -697,7 +672,7 @@ irtkGenericImage<VoxelType>::GetRegion(int i1, int j1, int k1, int i2, int j2,
   attr._yorigin = 0;
   attr._zorigin = 0;
   irtkGenericImage<VoxelType> image(attr);
-  
+
   // Calculate position of first voxel in roi in original image
   x1 = i1;
   y1 = j1;
@@ -713,43 +688,37 @@ irtkGenericImage<VoxelType>::GetRegion(int i1, int j1, int k1, int i2, int j2,
   // Shift origin of new image accordingly
   image.PutOrigin(x1 - x2, y1 - y2, z1 - z2);
 
-  /*image.Print();
-  cout << "sum1 = " << image.Sum() << endl;
-  cout << _attr._t << " " << k2 << " " << j2 << " " << i2 << endl;*/
-  
   // Copy region
-  for (l = 0; l < _attr._t; l++) { // t
-      for (k = k1; k < k2; k++) { //z
-	  for (j = j1; j < j2; j++) { // y
-	      for (i = i1; i < i2; i++) { // x
+  for (l = 0; l < _attr._t; l++) {
+    for (k = k1; k < k2; k++) {
+      for (j = j1; j < j2; j++) {
+        for (i = i1; i < i2; i++) {
 #ifdef _1D_
-		  image._matrix[TO1D(l, (k - k1), (j - j1), (i - i1), attr._t, attr._z, attr._y, attr._x)] =
-		      _matrix[TO1D(l, k, j, i, _attr._t, _attr._z,
-				   _attr._y, _attr._x)];
+          image._matrix[TO1D(l, (k - k1), (j - j1), (i - i1), attr._t, attr._z, attr._y, attr._x)] =
+            _matrix[TO1D(l, k, j, i, _attr._t, _attr._z,
+                _attr._y, _attr._x)];
 #else
-		  image._matrix[l][k - k1][j - j1][i - i1] = _matrix[l][k][j][i];
+          image._matrix[l][k - k1][j - j1][i - i1] = _matrix[l][k][j][i];
 #endif
-	      }
-	  }
+        }
       }
+    }
   }
-  
-  //cout << "sum2 = " << image.Sum() << endl;
-
-  //cout << "GetRegion END" << endl;
   return image;
 }
 
 template <class VoxelType>
 irtkGenericImage<VoxelType>
 irtkGenericImage<VoxelType>::GetRegion(int i1, int j1, int k1, int l1, int i2,
-                                       int j2, int k2, int l2) const {
+    int j2, int k2, int l2) const {
   int i, j, k, l;
   double x1, y1, z1, x2, y2, z2;
 
-  if ((i1 < 0) || (i1 >= i2) || (j1 < 0) || (j1 >= j2) || (k1 < 0) ||
-      (k1 >= k2) || (l1 < 0) || (l1 >= l2) || (i2 > _attr._x) ||
-      (j2 > _attr._y) || (k2 > _attr._z) || (l2 > _attr._t)) {
+  if ((i1 < 0) || (i1 >= i2) ||
+      (j1 < 0) || (j1 >= j2) ||
+      (k1 < 0) || (k1 >= k2) ||
+      (l1 < 0) || (l1 >= l2) ||
+      (i2 > _attr._x) || (j2 > _attr._y) || (k2 > _attr._z) || (l2 > _attr._t)) {
     stringstream msg;
     msg << "irtkGenericImage<VoxelType>::GetRegion: Parameter out of range\n";
     cerr << msg.str();
@@ -788,12 +757,12 @@ irtkGenericImage<VoxelType>::GetRegion(int i1, int j1, int k1, int l1, int i2,
       for (j = j1; j < j2; j++) {
         for (i = i1; i < i2; i++) {
 #ifdef _1D_
-	    image._matrix[TO1D((l - l1), (k - k1), (j - j1), (i - i1), attr._t, attr._z,
-			       attr._y, attr._x)] =
-		_matrix[TO1D(l, k, j, i, _attr._t, _attr._z,
-			    _attr._y, _attr._x)];
+          image._matrix[TO1D((l - l1), (k - k1), (j - j1), (i - i1), attr._t, attr._z,
+              attr._y, attr._x)] =
+            _matrix[TO1D(l, k, j, i, _attr._t, _attr._z,
+                _attr._y, _attr._x)];
 #else
-	    image._matrix[l - l1][k - k1][j - j1][i - i1] = _matrix[l][k][j][i];
+          image._matrix[l - l1][k - k1][j - j1][i - i1] = _matrix[l][k][j][i];
 #endif
         }
       }
@@ -1194,11 +1163,11 @@ template <class VoxelType> void irtkGenericImage<VoxelType>::ReflectX() {
       for (y = 0; y < _attr._y; y++) {
         for (x = 0; x < _attr._x / 2; x++) {
 #ifdef _1D_
-	    swap(_matrix[TO1D(t, z, y, x, _attr._t, _attr._z, _attr._y, _attr._x)],
-		 _matrix[TO1D(t, z, y, (_attr._x - (x + 1)), _attr._t, _attr._z,
-			      _attr._y, _attr._x)]);
+          swap(_matrix[TO1D(t, z, y, x, _attr._t, _attr._z, _attr._y, _attr._x)],
+              _matrix[TO1D(t, z, y, (_attr._x - (x + 1)), _attr._t, _attr._z,
+                _attr._y, _attr._x)]);
 #else
-	    swap(_matrix[t][z][y][x], _matrix[t][z][y][_attr._x - (x + 1)]);
+          swap(_matrix[t][z][y][x], _matrix[t][z][y][_attr._x - (x + 1)]);
 #endif
         }
       }
@@ -1214,11 +1183,11 @@ template <class VoxelType> void irtkGenericImage<VoxelType>::ReflectY() {
       for (y = 0; y < _attr._y / 2; y++) {
         for (x = 0; x < _attr._x; x++) {
 #ifdef _1D_
-	    swap(_matrix[TO1D(t, z, y, x, _attr._t, _attr._z, _attr._y, _attr._x)],
-		 _matrix[TO1D(t, z, (_attr._y - (y + 1)), x, _attr._t, _attr._z, _attr._y,
-			      _attr._x)]);
+          swap(_matrix[TO1D(t, z, y, x, _attr._t, _attr._z, _attr._y, _attr._x)],
+              _matrix[TO1D(t, z, (_attr._y - (y + 1)), x, _attr._t, _attr._z, _attr._y,
+                _attr._x)]);
 #else
-	  swap(_matrix[t][z][y][x], _matrix[t][z][_attr._y - (y + 1)][x]);
+          swap(_matrix[t][z][y][x], _matrix[t][z][_attr._y - (y + 1)][x]);
 #endif
         }
       }
@@ -1234,11 +1203,11 @@ template <class VoxelType> void irtkGenericImage<VoxelType>::ReflectZ() {
       for (y = 0; y < _attr._y; y++) {
         for (x = 0; x < _attr._x; x++) {
 #ifdef _1D_
-	    swap(_matrix[TO1D(t, z, y, x, _attr._t, _attr._z, _attr._y, _attr._x)],
-		 _matrix[TO1D(t, (_attr._z - (z + 1)), y, x, _attr._t, _attr._z, _attr._y,
-                            _attr._x)]);
+          swap(_matrix[TO1D(t, z, y, x, _attr._t, _attr._z, _attr._y, _attr._x)],
+              _matrix[TO1D(t, (_attr._z - (z + 1)), y, x, _attr._t, _attr._z, _attr._y,
+                _attr._x)]);
 #else
-	    swap(_matrix[t][z][y][x], _matrix[t][_attr._z - (z + 1)][y][x]);
+          swap(_matrix[t][z][y][x], _matrix[t][_attr._z - (z + 1)][y][x]);
 #endif
         }
       }
@@ -1248,8 +1217,6 @@ template <class VoxelType> void irtkGenericImage<VoxelType>::ReflectZ() {
 
 template <class VoxelType>
 void irtkGenericImage<VoxelType>::FlipXY(int modifyOrigin) {
-    //cout << "********** FLIPXY *********" << endl;
-
   int i, j, k, m;
 
 #ifdef _1D_
@@ -1257,26 +1224,26 @@ void irtkGenericImage<VoxelType>::FlipXY(int modifyOrigin) {
 #else
   VoxelType ****matrix = NULL;
 #endif
-  
-  
+
+
 #ifdef _1D_
   matrix = new VoxelType[_attr._y * _attr._x * _attr._z * _attr._t];
 #else
   //Allocate memory
   matrix = Allocate(matrix, _attr._y, _attr._x, _attr._z, _attr._t);
 #endif
-    
+
   for (m = 0; m < _attr._t; m++) {
     for (k = 0; k < _attr._z; k++) {
       for (j = 0; j < _attr._y; j++) {
-	  for (i = 0; i < _attr._x; i++) {
+        for (i = 0; i < _attr._x; i++) {
 #ifdef _1D_
-	      matrix[TO1D(m, k, i, j, _attr._t, _attr._z, _attr._x, _attr._y)] =
-		  _matrix[TO1D(m, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
+          matrix[TO1D(m, k, i, j, _attr._t, _attr._z, _attr._x, _attr._y)] =
+            _matrix[TO1D(m, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
 #else
-	      matrix[m][k][i][j] = _matrix[m][k][j][i];
+          matrix[m][k][i][j] = _matrix[m][k][j][i];
 #endif
-	  }
+        }
       }
     }
   }
@@ -1303,27 +1270,18 @@ void irtkGenericImage<VoxelType>::FlipXY(int modifyOrigin) {
 
   // Update transformation matrix
   this->UpdateMatrix();
-  
-/*  cout << this->Get(1, 0, 0, 0) << endl;
-  cout << this->Get(65, 12, 23, 0) << endl;
-  cout << this->Get(3, 15, 18, 0) << endl;
-  cout << this->Get(35, 35, 56, 0) << endl;
 
-  cout << "*************** FLIPXY END ***********" << endl;
-  exit(-1);*/
 }
 
 template <class VoxelType>
 void irtkGenericImage<VoxelType>::FlipXZ(int modifyOrigin) {
-    //cout << "********** FLIPXZ *********" << endl;
-    
   int i, j, k, l;
 #ifdef _1D_
   VoxelType *matrix = NULL;
 #else
   VoxelType ****matrix = NULL;
 #endif
-  
+
   // Allocate memory
 #ifdef _1D_
   matrix = new VoxelType[_attr._y * _attr._x * _attr._z * _attr._t];
@@ -1336,10 +1294,10 @@ void irtkGenericImage<VoxelType>::FlipXZ(int modifyOrigin) {
       for (j = 0; j < _attr._y; j++) {
         for (i = 0; i < _attr._x; i++) {
 #ifdef _1D_
-	    matrix[TO1D(l, i, j, k, _attr._t, _attr._x, _attr._y, _attr._z)] =
-		_matrix[TO1D(l, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
+          matrix[TO1D(l, i, j, k, _attr._t, _attr._x, _attr._y, _attr._z)] =
+            _matrix[TO1D(l, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
 #else
-	    matrix[l][i][j][k] = _matrix[l][k][j][i];
+          matrix[l][i][j][k] = _matrix[l][k][j][i];
 #endif
         }
       }
@@ -1369,19 +1327,10 @@ void irtkGenericImage<VoxelType>::FlipXZ(int modifyOrigin) {
 
   // Update transformation matrix
   this->UpdateMatrix();
-
-  /*cout << this->Get(1, 0, 0, 0) << endl;
-  cout << this->Get(65, 12, 23, 0) << endl;
-  cout << this->Get(3, 15, 18, 0) << endl;
-  cout << this->Get(35, 35, 56, 0) << endl;
-
-  cout << "*************** FLIPXZ END ***********" << endl;
-  exit(-1);*/
 }
 
 template <class VoxelType>
 void irtkGenericImage<VoxelType>::FlipYZ(int modifyOrigin) {
-    //cout << "FLIPYZ" << endl;
   int i, j, k, l;
 #ifdef _1D_
   VoxelType *matrix = NULL;
@@ -1401,10 +1350,10 @@ void irtkGenericImage<VoxelType>::FlipYZ(int modifyOrigin) {
       for (j = 0; j < _attr._y; j++) {
         for (i = 0; i < _attr._x; i++) {
 #ifdef _1D_
-	    matrix[TO1D(l, j, k, i, _attr._t, _attr._y, _attr._z, _attr._x)] =
-		_matrix[TO1D(l, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
+          matrix[TO1D(l, j, k, i, _attr._t, _attr._y, _attr._z, _attr._x)] =
+            _matrix[TO1D(l, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
 #else
-	    matrix[l][j][k][i] = _matrix[l][k][j][i];
+          matrix[l][j][k][i] = _matrix[l][k][j][i];
 #endif
         }
       }
@@ -1437,9 +1386,7 @@ void irtkGenericImage<VoxelType>::FlipYZ(int modifyOrigin) {
 
 template <class VoxelType>
 void irtkGenericImage<VoxelType>::FlipXT(int modifyOrigin) {
-    //cout << "FLIPXT" << endl;
   int i, j, k, m;
-
 #ifdef _1D_
   VoxelType *matrix = NULL;
 #else
@@ -1452,16 +1399,16 @@ void irtkGenericImage<VoxelType>::FlipXT(int modifyOrigin) {
 #else
   matrix = Allocate(matrix, _attr._t, _attr._y, _attr._z, _attr._x);
 #endif
-  
+
   for (m = 0; m < _attr._t; m++) {
     for (k = 0; k < _attr._z; k++) {
       for (j = 0; j < _attr._y; j++) {
-	  for (i = 0; i < _attr._x; i++) {
+        for (i = 0; i < _attr._x; i++) {
 #ifdef _1D_
-	      matrix[TO1D(i, k, j, m, _attr._x, _attr._z, _attr._y, _attr._t)] =
-		  _matrix[TO1D(m, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
+          matrix[TO1D(i, k, j, m, _attr._x, _attr._z, _attr._y, _attr._t)] =
+            _matrix[TO1D(m, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
 #else
-	      matrix[i][k][j][m] = _matrix[m][k][j][i];
+          matrix[i][k][j][m] = _matrix[m][k][j][i];
 #endif
         }
       }
@@ -1490,11 +1437,11 @@ void irtkGenericImage<VoxelType>::FlipXT(int modifyOrigin) {
 
   // Update transformation matrix
   this->UpdateMatrix();
+
 }
 
 template <class VoxelType>
 void irtkGenericImage<VoxelType>::FlipYT(int modifyOrigin) {
-    //cout << "FLIPYT" << endl;
   int i, j, k, m;
 #ifdef _1D_
   VoxelType *matrix = NULL;
@@ -1508,16 +1455,16 @@ void irtkGenericImage<VoxelType>::FlipYT(int modifyOrigin) {
 #else
   matrix = Allocate(matrix, _attr._x, _attr._t, _attr._z, _attr._y);
 #endif
-  
+
   for (m = 0; m < _attr._t; m++) {
     for (k = 0; k < _attr._z; k++) {
       for (j = 0; j < _attr._y; j++) {
         for (i = 0; i < _attr._x; i++) {
 #ifdef _1D_
-	      matrix[TO1D(j, k, m, i, _attr._y, _attr._z, _attr._t, _attr._x)] =
-		  _matrix[TO1D(m, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
+          matrix[TO1D(j, k, m, i, _attr._y, _attr._z, _attr._t, _attr._x)] =
+            _matrix[TO1D(m, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
 #else
-	      matrix[j][k][m][i] = _matrix[m][k][j][i];
+          matrix[j][k][m][i] = _matrix[m][k][j][i];
 #endif
         }
       }
@@ -1546,11 +1493,11 @@ void irtkGenericImage<VoxelType>::FlipYT(int modifyOrigin) {
 
   // Update transformation matrix
   this->UpdateMatrix();
+
 }
 
 template <class VoxelType>
 void irtkGenericImage<VoxelType>::FlipZT(int modifyOrigin) {
-    //cout << "FLIPZT" << endl;
   int i, j, k, m;
 #ifdef _1D_
   VoxelType *matrix = NULL;
@@ -1565,17 +1512,15 @@ void irtkGenericImage<VoxelType>::FlipZT(int modifyOrigin) {
   matrix = Allocate(matrix, _attr._x, _attr._y, _attr._t, _attr._z);
 #endif
 
-  
-
   for (m = 0; m < _attr._t; m++) {
     for (k = 0; k < _attr._z; k++) {
       for (j = 0; j < _attr._y; j++) {
         for (i = 0; i < _attr._x; i++) {
 #ifdef _1D_
-	      matrix[TO1D(k, m, j, i, _attr._z, _attr._t, _attr._y, _attr._x)] =
-		  _matrix[TO1D(m, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
+          matrix[TO1D(k, m, j, i, _attr._z, _attr._t, _attr._y, _attr._x)] =
+            _matrix[TO1D(m, k, j, i, _attr._t, _attr._z, _attr._y, _attr._x)];
 #else
-	      matrix[k][m][j][i] = _matrix[m][k][j][i];
+          matrix[k][m][j][i] = _matrix[m][k][j][i];
 #endif
         }
       }
@@ -1605,6 +1550,7 @@ void irtkGenericImage<VoxelType>::FlipZT(int modifyOrigin) {
 
   // Update transformation matrix
   this->UpdateMatrix();
+
 }
 
 #ifdef HAS_VTK

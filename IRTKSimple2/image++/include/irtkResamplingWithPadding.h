@@ -39,7 +39,7 @@ template <class VoxelType> class irtkResamplingWithPadding : public irtkResampli
 
   friend class irtkMultiThreadedResamplingWithPadding<VoxelType>;
 
-  #endif*/
+#endif*/
 
 protected:
 

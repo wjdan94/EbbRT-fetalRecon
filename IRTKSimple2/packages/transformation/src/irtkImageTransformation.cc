@@ -28,7 +28,7 @@
 
 public:
 
-    irtkMultiThreadedImageTransformation(irtkImageTransformation *imagetransformation,  int toutput, int tinput) {
+  irtkMultiThreadedImageTransformation(irtkImageTransformation *imagetransformation,  int toutput, int tinput) {
     _toutput = toutput;
     _tinput  = tinput;
     _imagetransformation = imagetransformation;
@@ -39,7 +39,7 @@ public:
     double x, y, z, time;
 
     time = _imagetransformation->_output->ImageToTime(_toutput);
-    
+
     //actually parallel for loop - TODO blocking?
     for (k = r.begin(); k != r.end(); k++) {
 
@@ -204,7 +204,7 @@ void irtkImageTransformation::Run()
   int i, j, k, l;
 
 //#ifdef HAS_TBB
-      //double t;
+//  double t;
 //#else
   double x, y, z, t;
 //#endif
@@ -259,7 +259,7 @@ void irtkImageTransformation::Run()
 
 /*#ifdef HAS_TBB
       parallel_for(blocked_range<int>(0, _output->GetZ(), 1), irtkMultiThreadedImageTransformation(this, l, t));
-      #else*/
+#else*/
 
       double time = this->_output->ImageToTime(l);
 
@@ -321,7 +321,7 @@ void irtkImageTransformation::Run()
 #endif
   init.terminate();
 
-  #endif*/
+#endif*/
 
 }
 

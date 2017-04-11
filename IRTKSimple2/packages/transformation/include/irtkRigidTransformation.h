@@ -43,14 +43,7 @@ protected:
   template <class Archive>
   void serialize(Archive &ar, const unsigned int version) {
     ar & _tx & _ty & _tz & _rx & _ry & _rz & _cosrx
-	& _cosry & _cosrz & _sinrx & _sinry & _sinrz; 
-
-//    if(_matrix == NULL)
-    //  {
-//	_matrix = irtkMatrix(4,4);
-//	_matrix.Ident();
-//	this->UpdateMatrix();
-    //  }
+      & _cosry & _cosrz & _sinrx & _sinry & _sinrz; 
 
     ar & _matrix;
   }
@@ -176,7 +169,7 @@ public:
   virtual void Print();
 
   void Print2();
-  
+
   void Print3();
   
   double Sum();
@@ -188,16 +181,16 @@ public:
   virtual const char *NameOfClass();
 
   /// Reads a transformation from a file
-  virtual irtkCifstream &Read(irtkCifstream &);
+  virtual irtkCifstream &Read(irtkCifstream&);
 
   /// Writes a transformation to a file
-  virtual irtkCofstream &Write(irtkCofstream &);
+  virtual irtkCofstream &Write(irtkCofstream&);
 
   /// Imports a transformation from a file
-  virtual istream &Import(istream &);
+  virtual istream &Import(istream&);
 
   /// Exports a transformation to a file
-  virtual ostream &Export(ostream &);
+  virtual ostream &Export(ostream&);
 
   /// Puts the transformation matrix (transformation parameters are updated)
   virtual void PutMatrix(const irtkMatrix &);

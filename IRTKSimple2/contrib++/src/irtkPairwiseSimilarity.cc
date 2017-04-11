@@ -177,7 +177,7 @@ public:
 	}
 };
 
-#endif
+//#endif
 
 irtkPairwiseSimilarity::irtkPairwiseSimilarity()
 {
@@ -465,7 +465,7 @@ void irtkPairwiseSimilarity::GetSimilarities()
 		}
 		else
 		parallel_for(blocked_range<int>(1, _nrRows, int(blocks)), evaluate);
-		#else*/
+    #else*/
 		for (int j = 0; j < _nrRows + _nrCols; j++) {
 			if (j > i || _twoSets) {
 				//	cout << _twoSets << " " << j << " " << _nrRows << " " << _nrSubjects << endl;
@@ -601,7 +601,7 @@ void irtkPairwiseSimilarity::GetSimilarities()
 			}
 		}
 
-#endif
+//#endif
 	}
 
 }

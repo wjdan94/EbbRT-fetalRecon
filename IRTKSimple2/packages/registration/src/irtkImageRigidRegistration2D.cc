@@ -113,7 +113,7 @@ double irtkImageRigidRegistration2D::Evaluate()
 /*#ifdef HAS_TBB
   irtkMultiThreadedImageRigidRegistrationEvaluate2D evaluate(this);
   parallel_reduce(blocked_range<int>(0, _target->GetY(), 20), evaluate);
-  #else*/
+#else*/
 
    for (t = 0; t < _target->GetT(); t++) {
 
