@@ -483,6 +483,9 @@ void irtkReconstruction::CropImage(irtkRealImage &image,
   }
 
   x1 = i;
+  if (_debug)
+    cout << "Region of interest is " << x1 << " " << y1 << " " << z1 << " "
+      << " " << x2 << " " << y2 << " " << z2 << endl;
 
   // [fetalReconstruction] Cut region of interest
   image = image.GetRegion(x1, y1, z1, x2 + 1, y2 + 1, z2 + 1);

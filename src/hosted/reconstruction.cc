@@ -246,7 +246,7 @@ void initializeThikness(vector<irtkRealImage> stacks) {
 }
 
 irtkRealImage* getMask(EbbRef<irtkReconstruction> reconstruction,
-    vector<irtkRealImage> stacks, 
+    vector<irtkRealImage> &stacks, 
     vector<irtkRigidTransformation>& stackTransformations,
     int templateNumber) {
 
