@@ -3,7 +3,7 @@
 	url = https://github.com/handong32/fetal-data.git
 [submodule "fetalReconstruction"]
 	path = ext/fetalReconstruction
-	url = https://github.com/jmcadden/fetalReconstruction.git
+	url = https://github.com/SESA/fetalReconstruction.git
 [submodule "EbbRT-libgsl"]
 	path = ext/EbbRT-libgsl
 	url = https://github.com/SESA/EbbRT-libgsl.git
