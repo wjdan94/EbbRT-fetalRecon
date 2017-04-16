@@ -604,16 +604,6 @@ void irtkReconstruction::CoeffInit(ebbrt::IOBuf::DataPointer& dp,
   _sliceInsideCPU.clear();
   _sliceInsideCPU.resize(_slices.size());
 
-  int diff = _end - _start;
-
-  //int factor = (int)ceil(diff / (float)_numThreads);
-  int factor = (int)ceil(diff / (float)1);
-
-  //TODO: change this for multithread
-  int start = _start + (0 * factor);
-  int end = _start + (0 * factor) + factor;
-  end = (end > diff) ? _end : end;
-
   ParallelCoeffInit();
 
   _volumeWeights.Initialize(_reconstructed.GetImageAttributes());
@@ -697,7 +687,6 @@ void irtkReconstruction::GaussianReconstruction() {
     }
 
     _voxelNum[inputIndex] = sliceVoxNum;
-    //cout << "_voxelNum[" << inputIndex << "]: " << sliceVoxNum << endl;
   }
 }
 
@@ -1590,8 +1579,6 @@ void irtkReconstruction::ReturnFromScaleVolume(
 void irtkReconstruction::ParallelSliceToVolumeRegistration() {
   irtkImageAttributes attr = _reconstructed.GetImageAttributes();
 
-  //attr.Print2("[ParallelSliceToVolumeRegistration input] attributes: ");
-  
   for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
     irtkImageRigidRegistrationWithPadding registration;
     irtkGreyPixel smin, smax;
@@ -1624,7 +1611,7 @@ void irtkReconstruction::ParallelSliceToVolumeRegistration() {
       registration.SetTargetPadding(-1);
       
       if (_debug) {
-        cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex 
+        cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex
           << " transformation: ";
         _transformations[inputIndex].Print2();
         cout << endl;
