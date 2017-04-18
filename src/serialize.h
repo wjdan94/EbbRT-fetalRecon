@@ -39,8 +39,14 @@ inline void deserializeTransformations(
 inline std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeTransformations(
     vector<irtkRigidTransformation>& transformations);
 
+inline std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeTransformations(
+    int start, int end, vector<irtkRigidTransformation>& transformations);
+
 inline std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeSlices(
     vector<irtkRealImage>& slices);
+
+inline std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeSlices(
+    int start, int end, vector<irtkRealImage>& slices);
 
 inline std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeTransformations(
     vector<irtkRigidTransformation>& transformations) {
@@ -49,6 +55,19 @@ inline std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeTransformations(
   dp.Get<int>() = transformations.size();
 
   for(int j = 0; j < transformations.size(); j++) {
+    buf->PrependChain(std::move(serializeRigidTrans(transformations[j])));
+  }
+
+  return buf;
+}
+
+inline std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeTransformations(
+    int start, int end, vector<irtkRigidTransformation>& transformations) {
+  auto buf = MakeUniqueIOBuf(1 * sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = transformations.size();
+
+  for(int j = start; j < end; j++) {
     buf->PrependChain(std::move(serializeRigidTrans(transformations[j])));
   }
 
@@ -297,6 +316,22 @@ inline std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeSlices(
   dp.Get<int>() = slices.size();
 
   for (int j = 0; j < slices.size(); j++) {
+    buf->PrependChain(std::move(serializeImageAttr(slices[j])));
+    buf->PrependChain(std::move(serializeImageI2W(slices[j])));
+    buf->PrependChain(std::move(serializeImageW2I(slices[j])));
+    buf->PrependChain(std::move(serializeSlice(slices[j])));
+  }
+
+  return buf;
+}
+
+inline std::unique_ptr<ebbrt::MutUniqueIOBuf> serializeSlices(
+    int start, int end, vector<irtkRealImage>& slices) {
+  auto buf = MakeUniqueIOBuf(sizeof(int));
+  auto dp = buf->GetMutDataPointer();
+  dp.Get<int>() = slices.size();
+
+  for (int j = start; j < end; j++) {
     buf->PrependChain(std::move(serializeImageAttr(slices[j])));
     buf->PrependChain(std::move(serializeImageI2W(slices[j])));
     buf->PrependChain(std::move(serializeImageW2I(slices[j])));

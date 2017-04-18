@@ -1,4 +1,3 @@
-//    Copyright Boston University SESA Group 2013 - 2014.
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
@@ -212,7 +211,7 @@ void irtkReconstruction::CoeffInitBootstrap(ebbrt::IOBuf::DataPointer& dp,
   auto nSlices = dp.Get<int>();
   _slices.resize(nSlices);
 
-  for (int i = 0; i < nSlices; i++) {
+  for (int i = _start; i < _end; i++) {
     deserializeSlice(dp, _slices[i]);
   }
 
@@ -237,7 +236,7 @@ void irtkReconstruction::CoeffInitBootstrap(ebbrt::IOBuf::DataPointer& dp,
 }
 
 void irtkReconstruction::InitializeEMValues() {
-  for (int i = 0; i < (int) _slices.size(); i++) {
+  for (int i = _start; i < _end; i++) {
     // [fetalRecontruction] Initialize voxel weights and bias values
     irtkRealPixel *pw = _weights[i].GetPointerToVoxels();
     irtkRealPixel *pb = _bias[i].GetPointerToVoxels();
@@ -268,21 +267,27 @@ void irtkReconstruction::InitializeEM() {
   _sliceWeightCPU.clear();
   _slicePotential.clear();
 
-  for (int i = 0; i < (int) _slices.size(); i++) {
+  _weights.resize(_slices.size());
+  _bias.resize(_slices.size());
+  _scaleCPU.resize(_slices.size());
+  _sliceWeightCPU.resize(_slices.size());
+  _slicePotential.resize(_slices.size());
+
+  for (int i = _start; i < _end; i++) {
     // [fetalRecontruction] Create images for voxel weights and bias fields
-    _weights.push_back(_slices[i]);
-    _bias.push_back(_slices[i]);
+    _weights[i] = _slices[i];
+    _bias[i] = _slices[i];
     // [fetalRecontruction] Create and initialize scales
-    _scaleCPU.push_back(1);
+    _scaleCPU[i] = 1;
     // [fetalRecontruction] Create and initialize slice weights
-    _sliceWeightCPU.push_back(1);
-    _slicePotential.push_back(0);
+    _sliceWeightCPU[i] = 1;
+    _slicePotential[i] = 0;
   }
 
   // [fetalRecontruction] Find the range of intensities
   _maxIntensity = voxel_limits<irtkRealPixel>::min();
   _minIntensity = voxel_limits<irtkRealPixel>::max();
-  for (unsigned int i = 0; i < _slices.size(); i++) {
+  for (unsigned int i = _start; i < _end; i++) {
     // [fetalRecontruction] to update minimum we need to exclude padding value
     irtkRealPixel *ptr = _slices[i].GetPointerToVoxels();
     for (int ind = 0; ind < _slices[i].GetNumberOfVoxels(); ind++) {
@@ -801,13 +806,18 @@ void irtkReconstruction::SimulateSlices(ebbrt::IOBuf::DataPointer& dp) {
 
   if (initialize) {
     _simulatedSlices.clear();
-    _simulatedWeights.clear();
-    _simulatedInside.clear();
+    _simulatedSlices.resize(_slices.size());
 
-    for(int i= 0 ; i < (int) _slices.size(); i++) {
-      _simulatedSlices.push_back(_slices[i]);
-      _simulatedWeights.push_back(_slices[i]);
-      _simulatedInside.push_back(_slices[i]);
+    _simulatedWeights.clear();
+    _simulatedWeights.resize(_slices.size());
+
+    _simulatedInside.clear();
+    _simulatedInside.resize(_slices.size());
+
+    for(int i= _start ; i < _end; i++) {
+      _simulatedSlices[i] = _slices[i];
+      _simulatedWeights[i] = _slices[i];
+      _simulatedInside[i] = _slices[i];
     }
   }
 
@@ -1515,11 +1525,10 @@ void irtkReconstruction::RestoreSliceIntensities() {
       factor = _stackFactor[_stackIndex[inputIndex]];
       // [fetalRecontruction] read the pointer to current slice
       p = _slices[inputIndex].GetPointerToVoxels();
-      for (int i = 0; i < _slices[inputIndex].GetNumberOfVoxels(); i++)
-      {
-	  if (*p > 0)
-	      *p = *p / factor;
-	  p++;
+      for (int i = 0; i < _slices[inputIndex].GetNumberOfVoxels(); i++) {
+        if (*p > 0)
+          *p = *p / factor;
+        p++;
       }
   }
 }
@@ -1656,7 +1665,8 @@ void irtkReconstruction::ReturnFromSliceToVolumeRegistration(
       dp.Get<int>() = _start;
       dp.Get<int>() = _end;
 	
-
+      //TODO: Serialize only the transformations for that backend and not
+      //all of them
       buf->PrependChain(std::move(serializeTransformations(_transformations)));
 
       SendMessage(frontEndNid, std::move(buf));

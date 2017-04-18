@@ -1296,7 +1296,7 @@ void irtkReconstruction::CoeffInitBootstrap(
         reinterpret_cast<const uint8_t *>(_stackIndex.data()),
         (size_t)(_stackIndex.size() * sizeof(int)));
 
-    buf->PrependChain(std::move(serializeSlices(_slices)));
+    buf->PrependChain(std::move(serializeSlices(start, end, _slices)));
     buf->PrependChain(std::move(serializeImage(_reconstructed)));
     buf->PrependChain(std::move(serializeImage(_mask)));
     buf->PrependChain(std::move(serializeTransformations(_transformations)));
