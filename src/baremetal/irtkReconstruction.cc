@@ -1587,62 +1587,85 @@ void irtkReconstruction::ReturnFromScaleVolume(
 
 void irtkReconstruction::ParallelSliceToVolumeRegistration() {
   irtkImageAttributes attr = _reconstructed.GetImageAttributes();
+  
+  size_t mainCPU = ebbrt::Cpu::GetMine();
+  ebbrt::EventManager::EventContext context;
+  std::atomic<size_t> count(0);
+  static ebbrt::SpinBarrier bar(_workers.size());
 
-  for (int inputIndex = _start; inputIndex < _end; inputIndex++) {
-    irtkImageRigidRegistrationWithPadding registration;
-    irtkGreyPixel smin, smax;
-    irtkGreyImage target;
-    irtkRealImage slice, w, b, t;
-    irtkResamplingWithPadding<irtkRealPixel> resampling(attr._dx, attr._dx,
-                                                        attr._dx, -1);
+  for (size_t workerIndex = 0; workerIndex < _workers.size(); workerIndex++) {
+    
+      auto workerId = _workers.at(workerIndex);
+    
+      ebbrt::event_manager->SpawnRemote(
+              [this, &context, &count, mainCPU, workerIndex, attr]() {
+        int start = workerIndex * _factor + _start;
+        int end = start + _factor; 
+        end = end > _end ? _end : end;
 
-    t = _slices[inputIndex];
-    resampling.SetInput(&_slices[inputIndex]);
-    resampling.SetOutput(&t);
-    resampling.Run();
-    target = t;
-    target.GetMinMax(&smin, &smax);
+        for (int inputIndex = start; inputIndex < end; inputIndex++) {
+            irtkImageRigidRegistrationWithPadding registration;
+            irtkGreyPixel smin, smax;
+            irtkGreyImage target;
+            irtkRealImage slice, w, b, t;
+            irtkResamplingWithPadding<irtkRealPixel> resampling(attr._dx, attr._dx,
+                                                                attr._dx, -1);
 
-    if (smax > -1) {
-      // [fetalRecontruction] put origin to zero
-      irtkRigidTransformation offset;
-      ResetOrigin(target, offset);
-      irtkMatrix mo = offset.GetMatrix();
-      irtkMatrix m = _transformations[inputIndex].GetMatrix();
-      m = m * mo;
-      _transformations[inputIndex].PutMatrix(m);
+            t = _slices[inputIndex];
+            resampling.SetInput(&_slices[inputIndex]);
+            resampling.SetOutput(&t);
+            resampling.Run();
+            target = t;
+        target.GetMinMax(&smin, &smax);
 
-      irtkGreyImage source = _reconstructed;
-      registration.SetInput(&target, &source);
-      
-      registration.SetOutput(&_transformations[inputIndex]);
-      registration.GuessParameterSliceToVolume();
-      registration.SetTargetPadding(-1);
-      
-      if (_debug) {
-        cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex
-          << " transformation: ";
-        _transformations[inputIndex].Print2();
-        cout << endl;
+        if (smax > -1) {
+          // [fetalRecontruction] put origin to zero
+          irtkRigidTransformation offset;
+          ResetOrigin(target, offset);
+          irtkMatrix mo = offset.GetMatrix();
+          irtkMatrix m = _transformations[inputIndex].GetMatrix();
+          m = m * mo;
+          _transformations[inputIndex].PutMatrix(m);
+
+          irtkGreyImage source = _reconstructed;
+          registration.SetInput(&target, &source);
+          
+          registration.SetOutput(&_transformations[inputIndex]);
+          registration.GuessParameterSliceToVolume();
+          registration.SetTargetPadding(-1);
+          
+          if (_debug) {
+            cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex
+              << " transformation: ";
+            _transformations[inputIndex].Print2();
+            cout << endl;
+          }
+
+          registration.Run();
+          
+          if (_debug) {
+            cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex 
+              << " transformation: ";
+            _transformations[inputIndex].Print2();
+            cout << endl;
+          }
+          
+          // [fetalRecontruction] undo the offset
+          mo.Invert();
+          m = _transformations[inputIndex].GetMatrix();
+          m = m * mo;
+          _transformations[inputIndex].PutMatrix(m);
+          
+        }
       }
-
-      registration.Run();
-      
-      if (_debug) {
-        cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex 
-          << " transformation: ";
-        _transformations[inputIndex].Print2();
-        cout << endl;
-      }
-      
-      // [fetalRecontruction] undo the offset
-      mo.Invert();
-      m = _transformations[inputIndex].GetMatrix();
-      m = m * mo;
-      _transformations[inputIndex].PutMatrix(m);
-      
-    }
+      count++;
+      bar.Wait();
+      while(count < _workers.size()); 
+      if (ebbrt::Cpu::GetMine() == mainCPU)
+        ebbrt::event_manager->ActivateContext(std::move(context));
+    }, workerId);
   }
+  ebbrt::event_manager->SaveContext(context);
 }
 
 void irtkReconstruction::SliceToVolumeRegistration(

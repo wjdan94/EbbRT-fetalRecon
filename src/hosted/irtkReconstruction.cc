@@ -919,6 +919,10 @@ void irtkReconstruction::MaskSlices() {
   }
 }
 
+int irtkReconstruction::GetTotalBytes() {
+    return _totalBytes;
+}
+
 void irtkReconstruction::ReadTransformation(char *folder) {
   int n = _slices.size();
   char name[256];
@@ -2118,6 +2122,7 @@ void irtkReconstruction::SetSmoothingParameters(double lambda) {
 void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
     std::unique_ptr<IOBuf> &&buffer) {
 
+  _totalBytes += buffer->ComputeChainDataLength();
   auto dp = buffer->GetDataPointer();
   auto fn = dp.Get<int>();
 

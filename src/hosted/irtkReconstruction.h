@@ -233,6 +233,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
         const vector<irtkRealImage> &probability_maps = vector<irtkRealImage>()
         );
 
+    int GetTotalBytes();
+
     void MaskSlices();
 
     void ReadTransformation(char* folder);

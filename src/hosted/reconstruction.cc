@@ -419,10 +419,12 @@ void AppMain() {
     reconstruction->GatherBackendTimers();
     reconstruction->GatherFrontendTimers();
 
+    cout << "[Total bytes sent] " << reconstruction->GetTotalBytes() << endl;
     cout << "[Initial reconstruction time] " << initialReconstructionSeconds << endl;
     cout << "[Total time] " << seconds << endl;
+    reconstruction->PrintImageSums("[checksum]");
     //TODO: uncomment this line once everything works.
-    //ebbrt::Cpu::Exit(EXIT_SUCCESS);
+    ebbrt::Cpu::Exit(EXIT_SUCCESS);
   });
 }
 
