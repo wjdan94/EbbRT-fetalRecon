@@ -1791,8 +1791,7 @@ void irtkReconstruction::Scale() {
   auto start = startTimer();
 
   for (int i = 0; i < (int) _nids.size(); i++) {
-    auto buf = MakeUniqueIOBuf(sizeof(int) + 
-        sizeof(struct eStepParameters));
+    auto buf = MakeUniqueIOBuf(sizeof(int));
     auto dp = buf->GetMutDataPointer();
 
     dp.Get<int>() = SCALE;
@@ -2005,8 +2004,7 @@ void irtkReconstruction::SuperResolution(int iteration) {
   irtkRealImage original = _reconstructed;
 
   for (int i = 0; i < (int) _nids.size(); i++) {
-    auto buf = MakeUniqueIOBuf(sizeof(int) + 
-        sizeof(struct eStepParameters));
+    auto buf = MakeUniqueIOBuf(2*sizeof(int));
     auto dp = buf->GetMutDataPointer();
 
     dp.Get<int>() = SUPERRESOLUTION;
