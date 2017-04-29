@@ -26,31 +26,48 @@ export EBBRT_NODE_ALLOCATOR_CUSTOM_NETWORK_NODE_CONFIG="--net=weave -e IFACE_DEF
 ```
 export EBBRT_NODE_LIST_CMD='docker network ls |grep weave | tr -s " " | cut -d " " -f 2 | cut -d "/" -f 1 | paste -sd "," -'
 ```
+otherwise it is possible to hard code the list of nodes in a similar way:
+```
+export EBBRT_NODE_LIST_CMD='echo node1,node2,node3'
+```
 
 ## Build
+#### Hosted
 ```
-EBBRT_SYSROOT=~/sysroot/native CMAKE_PREFIX_PATH=~/sysroot/hosted make -j
+$ mkdir build
+$ cd build
+$ cmake -DCMAKE_PREFIX_PATH=~/sysroots/release/hosted/ -DCMAKE_BUILD_TYPE=Release ../
+$ make -j
+```
+
+#### Native
+```
+$ cd build
+$ mkdir bm
+$ cd bm
+$ EBBRT_SYSROOT=~/sysroots/release/sysroot/ cmake -DCMAKE_TOOLCHAIN_FILE=~/sysroots/release/sysroot/usr/misc/ebbrt.cmake -$ DCMAKE_BUILD_TYPE=Release ../../
+$ make -j
 ```
 
 ## Run with small dataset
 ```
-./small.sh <threads> <iterations> <back_end_nodes> <front_end_cpus>
+./contrib/small.sh <threads> <iterations> <back_end_nodes> <front_end_cpus>
 ```
 Example:
 ```
-./small.sh 2 4 2 3
+./contrib/small.sh 2 4 2 3
 ```
 
 ## Run with large dataset
 ```
-./large.sh <threads> <iterations> <back_end_nodes> <front_end_cpus>
+./contrib/large.sh <threads> <iterations> <back_end_nodes> <front_end_cpus>
 ```
 
 **Note:** both datasets must be run with *at least* 2 threads.
 
 ## Example output
 ```
-./small.sh 2 1 2 1
+./contrib/small.sh 2 1 2 1
 + export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=2
 + export EBBRT_NODE_ALLOCATOR_DEFAULT_RAM=4
 + export EBBRT_NODE_ALLOCATOR_DEFAULT_NUMANODES=1
