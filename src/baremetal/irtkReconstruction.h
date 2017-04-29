@@ -128,6 +128,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void DefineWorkers();
 
     // CoeffInit functions
+    void ExecuteCoeffInit(ebbrt::IOBuf::DataPointer& dp, size_t cpu);
+
     void CoeffInit(ebbrt::IOBuf::DataPointer& dp, size_t cpu);
 
     void ParallelCoeffInit();
@@ -143,18 +145,24 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void ReturnFromCoeffInit(ebbrt::Messenger::NetworkId frontEndNid);
 
     // GaussianReconstruction function
+    void ExecuteGaussianReconstruction(Messenger::NetworkId frontEndNid);
+
     void GaussianReconstruction();
     
     void ReturnFromGaussianReconstruction(ebbrt::Messenger::NetworkId frontEndNid);
 
     // SimulateSlices functions
+    int ExecuteSimulateSlices(ebbrt::IOBuf::DataPointer& dp); 
+
     void ParallelSimulateSlices();
 
-    void SimulateSlices(ebbrt::IOBuf::DataPointer& dp);
+    int SimulateSlices(ebbrt::IOBuf::DataPointer& dp);
     
     void ReturnFromSimulateSlicest(ebbrt::Messenger::NetworkId frontEndNid);
 
     // RobustStatistics functions
+    void ExecuteInitializeRobustStatistics(Messenger::NetworkId frontEndNid);
+
     void InitializeRobustStatistics(double& sigma, int& num);
 
     void ReturnFromInitializeRobustStatistics(double& sigma, 
@@ -169,9 +177,18 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     void ParallelEStep(struct eStepReturnParameters& parameters);
 
+    void ExecuteEStepI(ebbrt::IOBuf::DataPointer& dp, 
+        Messenger::NetworkId frontEndNid); 
+
     struct eStepReturnParameters EStepI(ebbrt::IOBuf::DataPointer& dp);
     
+    void ExecuteEStepII(ebbrt::IOBuf::DataPointer& dp, 
+        Messenger::NetworkId frontEndNid);
+
     struct eStepReturnParameters EStepII(ebbrt::IOBuf::DataPointer& dp);
+
+    void ExecuteEStepIII(ebbrt::IOBuf::DataPointer& dp, 
+        Messenger::NetworkId frontEndNid);
 
     struct eStepReturnParameters EStepIII(ebbrt::IOBuf::DataPointer& dp);
 
@@ -185,11 +202,16 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
         Messenger::NetworkId nid);
 
     // Scale functions
+    void ExecuteScale(Messenger::NetworkId frontEndNid); 
+
     void ParallelScale();
 
     void Scale();
 
     // Superresolution functions
+    void ExecuteSuperResolution(ebbrt::IOBuf::DataPointer& dp, 
+        Messenger::NetworkId frontEndNid); 
+
     void ParallelSuperresolution();
 
     void SuperResolution(ebbrt::IOBuf::DataPointer& dp);
@@ -197,23 +219,32 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void ReturnFromSuperResolution(Messenger::NetworkId nid);
 
     // MStep functions
+    void ExecuteMStep(Messenger::NetworkId frontEndNid);
+
     void ParallelMStep( mStepReturnParameters& parameters);
 
-    void MStep(mStepReturnParameters& parameters, ebbrt::IOBuf::DataPointer& dp);
+    void MStep(mStepReturnParameters& parameters);
 
     void ReturnFromMStep(mStepReturnParameters& parameters,
         Messenger::NetworkId nid);
 
     // RestoreSliceIntensities functions
+    void ExecuteRestoreSliceIntensities();
+
     void RestoreSliceIntensities();
 
     // ScaleVolume functions
+    void ExecuteScaleVolume(Messenger::NetworkId frontEndNid);
+
     struct scaleVolumeParameters ScaleVolume();
     
     void ReturnFromScaleVolume(struct scaleVolumeParameters parameters,
         Messenger::NetworkId nid);
 
     // SliceToVolumeRegistration functions
+    void ExecuteSliceToVolumeRegistration(ebbrt::IOBuf::DataPointer& dp, 
+        Messenger::NetworkId frontEndNid); 
+
     void ParallelSliceToVolumeRegistration();
     
     void SliceToVolumeRegistration(ebbrt::IOBuf::DataPointer& dp);

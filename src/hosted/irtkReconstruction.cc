@@ -1310,16 +1310,6 @@ void irtkReconstruction::CoeffInitBootstrap(
     _totalBytes += buf->ComputeChainDataLength();
     SendMessage(_nids[i], std::move(buf));
   }
-
-  Gather("CoeffInitBootstrap");
-
-  auto seconds = endTimer(startTime);
-  _executionTimes.coeffInit += seconds;
-
-  if (_debug) {
-    PrintImageSums("[CoeffInit output]");
-    cout << "[CoeffInit time] " << seconds << endl;
-  }
 }
 
 void irtkReconstruction::CoeffInit(struct coeffInitParameters parameters) {
@@ -1336,16 +1326,6 @@ void irtkReconstruction::CoeffInit(struct coeffInitParameters parameters) {
 
     _totalBytes += buf->ComputeChainDataLength();
     SendMessage(_nids[i], std::move(buf));
-  }
-
-  Gather("CoeffInit");
-
-  auto seconds = endTimer(start);
-  _executionTimes.coeffInit += seconds;
-
-  if (_debug) {
-    PrintImageSums("[CoeffInit output]");
-    cout << "[CoeffInit time] " << seconds << endl;
   }
 }
 
@@ -1386,16 +1366,7 @@ void irtkReconstruction::GaussianReconstruction() {
   _volumeWeights.Initialize(_reconstructed.GetImageAttributes());
   _volumeWeights = 0;
 
-  for (int i = 0; i < (int) _numBackendNodes; i++) {
-    auto buf = MakeUniqueIOBuf(sizeof(int));
-    auto dp = buf->GetMutDataPointer();
-    dp.Get<int>() = GAUSSIAN_RECONSTRUCTION;
-
-    _totalBytes += buf->ComputeChainDataLength();
-    SendMessage(_nids[i], std::move(buf));
-  }
-
-  Gather("GaussianReconstruction");
+  Gather("CoeffInit & GaussianReconstruction");
 
   _reconstructed /= _volumeWeights;
 
@@ -1426,16 +1397,6 @@ void irtkReconstruction::SimulateSlices(bool initialize) {
     _totalBytes += buf->ComputeChainDataLength();
     SendMessage(_nids[i], std::move(buf));
   }
-
-  Gather("SimulateSlices");
-
-  auto seconds = endTimer(start);
-  _executionTimes.simulateSlices += seconds;
-
-  if (_debug) {
-    PrintImageSums("[SimulateSlices output]");
-    cout << fixed << "[SimulateSlices time] " << seconds << endl;
-  }
 }
 
 void irtkReconstruction::MStep(int iteration) {
@@ -1448,17 +1409,7 @@ void irtkReconstruction::MStep(int iteration) {
   _mMax = 0.0;
   _mNum = 0.0;
 
-  for (int i = 0; i < (int) _nids.size(); i++) {
-    auto buf = MakeUniqueIOBuf(sizeof(int));
-    auto dp = buf->GetMutDataPointer();
-
-    dp.Get<int>() = M_STEP;
-
-    _totalBytes += buf->ComputeChainDataLength();
-    SendMessage(_nids[i], std::move(buf));
-  }
-
-  Gather("MStep");
+  Gather("Simulate Slices & MStep");
 
   if (_mMix > 0) {
     _sigmaCPU = _mSigma / _mMix;
@@ -1499,14 +1450,6 @@ void irtkReconstruction::RestoreSliceIntensities() {
     _totalBytes += buf->ComputeChainDataLength();
     SendMessage(_nids[i], std::move(buf));
   }
-
-  Gather("RestoreSliceIntensities");
-
-  auto seconds = endTimer(start);
-  _executionTimes.restoreSliceIntensities += seconds;
-
-  if (_debug)
-    cout << "[RestoreSliceIntensities time] " << seconds << endl;
 }
 
 void irtkReconstruction::ScaleVolume() {
@@ -1515,16 +1458,6 @@ void irtkReconstruction::ScaleVolume() {
 
   _num = 0;
   _den = 0;
-
-  for (int i = 0; i < (int) _nids.size(); i++) {
-    auto buf = MakeUniqueIOBuf(sizeof(int));
-    auto dp = buf->GetMutDataPointer();
-
-    dp.Get<int>() = SCALE_VOLUME;
-
-    _totalBytes += buf->ComputeChainDataLength();
-    SendMessage(_nids[i], std::move(buf));
-  }
 
   Gather("ScaleVolume");
 
@@ -1573,17 +1506,7 @@ void irtkReconstruction::InitializeRobustStatistics() {
   _sigmaSum = 0;
   _numSum = 0;
 
-  for (int i = 0; i < (int) _nids.size(); i++) {
-    auto buf = MakeUniqueIOBuf(sizeof(int));
-    auto dp = buf->GetMutDataPointer();
-
-    dp.Get<int>() = INITIALIZE_ROBUST_STATISTICS;
-
-    _totalBytes += buf->ComputeChainDataLength();
-    SendMessage(_nids[i], std::move(buf));
-  }
-
-  Gather("InitializeRobustStatistics");
+  Gather("Simulate Slices & InitializeRobustStatistics");
 
   _sigmaCPU = _sigmaSum / _numSum;
   _sigmaSCPU = 0.025;
@@ -2124,20 +2047,12 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
   auto dp = buffer->GetDataPointer();
   auto fn = dp.Get<int>();
 
+  cout << "[SENDING FUNCTION] " << fn << endl;
+
   switch(fn) {
-    case COEFF_INIT: 
-      {
-        ReturnFromCoeffInit(dp);
-        break;
-      }
     case GAUSSIAN_RECONSTRUCTION:
       {
         ReturnFromGaussianReconstruction(dp);
-        break;
-      }
-    case SIMULATE_SLICES:
-      {
-        ReturnFromSimulateSlices(dp);
         break;
       }
     case INITIALIZE_ROBUST_STATISTICS:
@@ -2173,11 +2088,6 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
     case M_STEP:
       {
         ReturnFromMStep(dp);
-        break;
-      }
-    case RESTORE_SLICE_INTENSITIES: 
-      {
-        ReturnFromRestoreSliceIntensities(dp); 
         break;
       }
     case SCALE_VOLUME:

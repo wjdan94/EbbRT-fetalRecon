@@ -800,7 +800,7 @@ void irtkReconstruction::ParallelSimulateSlices() {
   ebbrt::event_manager->SaveContext(context);
 }
 
-void irtkReconstruction::SimulateSlices(ebbrt::IOBuf::DataPointer& dp) {
+int irtkReconstruction::SimulateSlices(ebbrt::IOBuf::DataPointer& dp) {
 
   int initialize = dp.Get<int>();
 
@@ -825,6 +825,8 @@ void irtkReconstruction::SimulateSlices(ebbrt::IOBuf::DataPointer& dp) {
   dp.Get(reconSize*sizeof(double), (uint8_t*)_reconstructed.GetMat());
 
   ParallelSimulateSlices();
+
+  return initialize;
 }
 /* End of SimulateSlices functions */
 
@@ -1487,8 +1489,7 @@ void irtkReconstruction::ParallelMStep(mStepReturnParameters& parameters) {
   ebbrt::event_manager->SaveContext(context);
 }
 
-void irtkReconstruction::MStep(mStepReturnParameters& parameters,
-    ebbrt::IOBuf::DataPointer& dp) {
+void irtkReconstruction::MStep(mStepReturnParameters& parameters) {
   parameters.sigma = 0;
   parameters.mix = 0;
   parameters.num = 0;
@@ -1737,6 +1738,196 @@ void irtkReconstruction::SendTimers(Messenger::NetworkId frontEndNid) {
   }, _IOCPU);
 }
 
+void irtkReconstruction::ExecuteCoeffInit(ebbrt::IOBuf::DataPointer& dp, 
+    size_t cpu) {
+
+  auto start = startTimer();
+  CoeffInit(dp, cpu);
+  auto seconds = endTimer(start);
+  _executionTimes.coeffInit += seconds;
+
+  if (_debug) {
+    cout << "[CoeffInit output] _averageVolumeWeight: " 
+      << _averageVolumeWeight << endl;
+    PrintImageSums("[CoeffInit output]");
+    cout << "[CoeffInit time] " << seconds << endl;
+  }
+}
+
+void irtkReconstruction::ExecuteGaussianReconstruction(
+    Messenger::NetworkId frontEndNid) {
+
+  auto start = startTimer();
+  GaussianReconstruction();
+  ReturnFromGaussianReconstruction(frontEndNid);
+  auto seconds = endTimer(start);
+  _executionTimes.gaussianReconstruction += seconds;
+
+  if (_debug) {
+    PrintImageSums("[GaussianReconstruction output]");
+    cout << fixed << "[GaussianReconstruction output] _volumeWeights: " 
+      << SumImage(_volumeWeights) << endl;
+    cout << "[GaussianReconstruction time] " << seconds << endl; 
+  }
+}
+
+int irtkReconstruction::ExecuteSimulateSlices(ebbrt::IOBuf::DataPointer& dp) { 
+
+  auto start = startTimer();
+  auto initialize = SimulateSlices(dp);
+  auto seconds = endTimer(start);
+  _executionTimes.simulateSlices += seconds;
+
+  if (_debug) {
+    PrintImageSums("[SimulateSlices output]");
+    cout << "[SimulateSlices output] " << seconds << endl;
+  }
+
+  return initialize;
+}
+
+void irtkReconstruction::ExecuteInitializeRobustStatistics(Messenger::NetworkId frontEndNid) { 
+  auto start = startTimer();
+  double sigma;
+  int num;
+  InitializeRobustStatistics(sigma, num);
+  ReturnFromInitializeRobustStatistics(sigma, num, frontEndNid);
+  auto seconds = endTimer(start);
+  _executionTimes.initializeRobustStatistics += seconds;
+
+  if (_debug) {
+    cout << "[InitializeRobustStatistics output] sigma: " << sigma << endl;
+    cout << "[InitializeRobustStatistics output] num: " << num << endl; 
+    cout << "[InitializeRobustStatistics time]  " << seconds << endl; 
+  }
+}
+
+void irtkReconstruction::ExecuteMStep(Messenger::NetworkId frontEndNid) {
+  auto start = startTimer();
+  mStepReturnParameters parameters;
+  MStep(parameters);
+  ReturnFromMStep(parameters, frontEndNid);
+  auto seconds = endTimer(start);
+  _executionTimes.mStep += seconds;
+          
+  if (_debug) {
+    cout << "[MStep output] sigma: " << parameters.sigma << endl;
+    cout << "[MStep output] mix: " << parameters.mix << endl;
+    cout << "[MStep output] num: " << parameters.num << endl;
+    cout << "[MStep output] min: " << parameters.min << endl;
+    cout << "[MStep output] max: " << parameters.max << endl;
+    cout << "[MStep time] " << seconds << endl;
+  }
+}
+
+void irtkReconstruction::ExecuteEStepI(ebbrt::IOBuf::DataPointer& dp, 
+    Messenger::NetworkId frontEndNid) { 
+
+  auto start = startTimer();
+  auto parameters = EStepI(dp);
+  ReturnFromEStepI(parameters, frontEndNid);
+  auto seconds = endTimer(start);
+  _executionTimes.eStepI += seconds;
+
+  if (_debug)
+    cout << "[EStepI time] " << seconds << endl;
+}
+
+void irtkReconstruction::ExecuteEStepII(ebbrt::IOBuf::DataPointer& dp, 
+    Messenger::NetworkId frontEndNid) { 
+  auto start = startTimer();
+
+  auto parameters = EStepII(dp);
+  ReturnFromEStepII(parameters, frontEndNid);
+
+  auto seconds = endTimer(start);
+  _executionTimes.eStepII += seconds;
+
+  if (_debug)
+    cout << "[EStepII time] " << seconds << endl;
+}
+
+void irtkReconstruction::ExecuteEStepIII(ebbrt::IOBuf::DataPointer& dp, 
+    Messenger::NetworkId frontEndNid) { 
+
+  auto start = startTimer();
+  auto parameters = EStepIII(dp);
+  ReturnFromEStepIII(parameters, frontEndNid);
+  auto seconds = endTimer(start);
+  _executionTimes.eStepIII += seconds;
+
+  if (_debug)
+    cout << "[EStepIII time] " << seconds << endl;
+}
+
+void irtkReconstruction::ExecuteScale(Messenger::NetworkId frontEndNid) { 
+
+  auto start = startTimer();
+  Scale();
+  ReturnFrom(SCALE, frontEndNid);
+  auto seconds = endTimer(start);
+  _executionTimes.scale += seconds;
+
+  if (_debug) {
+    PrintImageSums("[Scale output]");
+    cout << "[Scale time] " << seconds << endl;
+  }
+}
+
+void irtkReconstruction::ExecuteSuperResolution(ebbrt::IOBuf::DataPointer& dp, 
+    Messenger::NetworkId frontEndNid) { 
+
+  auto start = startTimer();
+  SuperResolution(dp);
+  ReturnFromSuperResolution(frontEndNid);
+  auto seconds = endTimer(start);
+  _executionTimes.superResolution += seconds;
+
+  if (_debug) {
+    cout << fixed << "[SuperResolution output] _addon: " 
+      << SumImage(_addon) << endl;
+    cout << fixed << "[SuperResolution output] _confidenceMap: " 
+      << SumImage(_confidenceMap) << endl;
+    cout << "[SuperResolution time] " << seconds << endl;
+  }
+}
+
+void irtkReconstruction::ExecuteRestoreSliceIntensities() {
+
+  auto start = startTimer();
+  RestoreSliceIntensities();
+  auto seconds = endTimer(start);
+  _executionTimes.restoreSliceIntensities += seconds;
+
+  if (_debug)
+    cout << "[RestoreSliceIntensities time] " << seconds << endl;
+}
+
+void irtkReconstruction::ExecuteScaleVolume(Messenger::NetworkId nid) {
+
+  auto start = startTimer();
+  auto parameters = ScaleVolume();
+  ReturnFromScaleVolume(parameters, nid);
+  auto seconds = endTimer(start);
+  _executionTimes.scaleVolume += seconds;
+
+  if (_debug)
+    cout << "[ScaleVolume time] " << seconds << endl;
+}
+
+void irtkReconstruction::ExecuteSliceToVolumeRegistration(
+    ebbrt::IOBuf::DataPointer& dp, Messenger::NetworkId frontEndNid) { 
+
+  auto start = startTimer();
+  SliceToVolumeRegistration(dp);
+  ReturnFromSliceToVolumeRegistration(frontEndNid);
+  auto seconds = endTimer(start);
+  _executionTimes.sliceToVolumeRegistration += seconds;
+
+  if (_debug)
+    cout << "[SliceToVolumeRegistration time] " << seconds << endl;
+}
+
 void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
     std::unique_ptr<IOBuf> &&buffer) {
   size_t cpu = ebbrt::Cpu::GetMine();
@@ -1756,225 +1947,53 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
     switch(fn) {
       case COEFF_INIT:
         {
-          auto start = startTimer();
-
-          CoeffInit(dp, cpu);
-          ReturnFrom(COEFF_INIT, nid);
-          auto seconds = endTimer(start);
-          _executionTimes.coeffInit += seconds;
-
-          if (_debug) {
-            cout << "[CoeffInit output] _averageVolumeWeight: " 
-              << _averageVolumeWeight << endl;
-            PrintImageSums("[CoeffInit output]");
-            cout << "[CoeffInit time] " << seconds << endl;
-          }
-
-          break;
-        }
-      case GAUSSIAN_RECONSTRUCTION:
-        {
-          auto start = startTimer();
-          
-          GaussianReconstruction();
-          ReturnFromGaussianReconstruction(nid);
-          
-          auto seconds = endTimer(start);
-          _executionTimes.gaussianReconstruction += seconds;
-
-          if (_debug) {
-            PrintImageSums("[GaussianReconstruction output]");
-            cout << fixed << "[GaussianReconstruction output] _volumeWeights: " 
-              << SumImage(_volumeWeights) << endl;
-            cout << "[GaussianReconstruction time] " << seconds << endl; 
-          }
-
+          ExecuteCoeffInit(dp, cpu);
+          ExecuteGaussianReconstruction(nid);
           break;
         }
       case SIMULATE_SLICES:
         {
-          auto start = startTimer();
-
-          SimulateSlices(dp);
-          ReturnFrom(SIMULATE_SLICES, nid);
-          
-          auto seconds = endTimer(start);
-          _executionTimes.simulateSlices += seconds;
-
-          if (_debug) {
-            PrintImageSums("[SimulateSlices output]");
-            cout << "[SimulateSlices output] " << seconds << endl;
-          }
-
-          break;
-        }
-      case INITIALIZE_ROBUST_STATISTICS:
-        {
-          
-          auto start = startTimer();
-          
-          double sigma;
-          int num;
-          InitializeRobustStatistics(sigma, num);
-          ReturnFromInitializeRobustStatistics(sigma, num, nid);
-          
-          auto seconds = endTimer(start);
-          _executionTimes.initializeRobustStatistics += seconds;
-
-          if (_debug) {
-            cout << "[InitializeRobustStatistics output] sigma: " << sigma << endl;
-            cout << "[InitializeRobustStatistics output] num: " << num << endl; 
-            cout << "[InitializeRobustStatistics time]  " << seconds << endl; 
-          }
-
+          auto initialize = ExecuteSimulateSlices(dp);
+          if (initialize)
+            ExecuteInitializeRobustStatistics(nid);
+          else
+            ExecuteMStep(nid);
           break;
         }
       case E_STEP_I:
         {
-          auto start = startTimer();
-
-          auto parameters = EStepI(dp);
-          ReturnFromEStepI(parameters, nid);
-          
-          auto seconds = endTimer(start);
-          _executionTimes.eStepI += seconds;
-          
-          if (_debug)
-            cout << "[EStepI time] " << seconds << endl;
-          
+          ExecuteEStepI(dp, nid); 
           break;
         }
       case E_STEP_II:
         {
-          auto start = startTimer();
-          
-          auto parameters = EStepII(dp);
-          ReturnFromEStepII(parameters, nid);
-          
-          auto seconds = endTimer(start);
-          _executionTimes.eStepII += seconds;
-          
-          if (_debug)
-            cout << "[EStepII time] " << seconds << endl;
-          
+          ExecuteEStepII(dp, nid);
           break;
         }
       case E_STEP_III:
         {
-          auto start = startTimer();
-
-          auto parameters = EStepIII(dp);
-          ReturnFromEStepIII(parameters, nid);
-          
-          auto seconds = endTimer(start);
-          _executionTimes.eStepIII += seconds;
-          
-          if (_debug)
-            cout << "[EStepIII time] " << seconds << endl;
-
+          ExecuteEStepIII(dp, nid);
           break;
         }
       case SCALE:
         {
-          auto start = startTimer();
-
-          Scale();
-          ReturnFrom(SCALE,nid);
-          
-          auto seconds = endTimer(start);
-          _executionTimes.scale += seconds;
-
-          if (_debug) {
-            PrintImageSums("[Scale output]");
-            cout << "[Scale time] " << seconds << endl;
-          }
-
+          ExecuteScale(nid);
           break;
         }
       case SUPERRESOLUTION:
         {
-          auto start = startTimer();
-
-          SuperResolution(dp);
-          ReturnFromSuperResolution(nid);
-          
-          auto seconds = endTimer(start);
-          _executionTimes.superResolution += seconds;
-
-          if (_debug) {
-            cout << fixed << "[SuperResolution output] _addon: " 
-              << SumImage(_addon) << endl;
-            cout << fixed << "[SuperResolution output] _confidenceMap: " 
-              << SumImage(_confidenceMap) << endl;
-            cout << "[SuperResolution time] " << seconds << endl;
-          }
-
-          break;
-        }
-      case M_STEP:
-        {
-          auto start = startTimer();
-          
-          mStepReturnParameters parameters;
-          MStep(parameters, dp);
-          ReturnFromMStep(parameters, nid);
-          
-          auto seconds = endTimer(start);
-          _executionTimes.mStep += seconds;
-          
-          if (_debug) {
-            cout << "[MStep output] sigma: " << parameters.sigma << endl;
-            cout << "[MStep output] mix: " << parameters.mix << endl;
-            cout << "[MStep output] num: " << parameters.num << endl;
-            cout << "[MStep output] min: " << parameters.min << endl;
-            cout << "[MStep output] max: " << parameters.max << endl;
-            cout << "[MStep time] " << seconds << endl;
-          }
+          ExecuteSuperResolution(dp, nid);
           break;
         }
       case RESTORE_SLICE_INTENSITIES:
         {
-          auto start = startTimer();
-
-          RestoreSliceIntensities();
-          ReturnFrom(RESTORE_SLICE_INTENSITIES,nid);
-          
-          auto seconds = endTimer(start);
-          _executionTimes.restoreSliceIntensities += seconds;
-          
-          if (_debug)
-            cout << "[RestoreSliceIntensities time] " << seconds << endl;
-          
-          break;  
-        }
-      case SCALE_VOLUME: 
-        {
-          auto start = startTimer();
-
-          auto parameters = ScaleVolume();
-          ReturnFromScaleVolume(parameters, nid);
-          
-          auto seconds = endTimer(start);
-          _executionTimes.scaleVolume += seconds;
-          
-          if (_debug)
-            cout << "[ScaleVolume time] " << seconds << endl;
-
+          ExecuteRestoreSliceIntensities(); 
+          ExecuteScaleVolume(nid);
           break;
         }
       case SLICE_TO_VOLUME_REGISTRATION:
         {
-          auto start = startTimer();
-
-          SliceToVolumeRegistration(dp);
-          ReturnFromSliceToVolumeRegistration(nid);
-          
-          auto seconds = endTimer(start);
-          _executionTimes.sliceToVolumeRegistration += seconds;
-          
-          if (_debug)
-            cout << "[SliceToVolumeRegistration time] " << seconds << endl;
-         
+          ExecuteSliceToVolumeRegistration(dp, nid); 
           break;
         }
       case GATHER_TIMERS:
