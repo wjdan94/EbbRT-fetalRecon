@@ -2047,8 +2047,6 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
   auto dp = buffer->GetDataPointer();
   auto fn = dp.Get<int>();
 
-  cout << "[SENDING FUNCTION] " << fn << endl;
-
   switch(fn) {
     case GAUSSIAN_RECONSTRUCTION:
       {

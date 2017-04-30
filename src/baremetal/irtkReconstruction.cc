@@ -1635,21 +1635,25 @@ void irtkReconstruction::ParallelSliceToVolumeRegistration() {
           registration.GuessParameterSliceToVolume();
           registration.SetTargetPadding(-1);
           
-          if (_debug) {
-            cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex
-              << " transformation: ";
-            _transformations[inputIndex].Print2();
-            cout << endl;
-          }
+          /*
+             if (_debug) {
+               cout << "[ParallelSliceToVolumeRegistration input] " << inputIndex
+               << " transformation: ";
+               _transformations[inputIndex].Print2();
+               cout << endl;
+               }
+          */
 
           registration.Run();
           
-          if (_debug) {
-            cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex 
-              << " transformation: ";
-            _transformations[inputIndex].Print2();
-            cout << endl;
-          }
+          /*
+             if (_debug) {
+               cout << "[ParallelSliceToVolumeRegistration output] " << inputIndex 
+               << " transformation: ";
+               _transformations[inputIndex].Print2();
+               cout << endl;
+               }
+          */
           
           // [fetalRecontruction] undo the offset
           mo.Invert();
