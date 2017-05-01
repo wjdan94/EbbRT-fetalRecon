@@ -63,7 +63,8 @@ Example:
 ./contrib/large.sh <threads> <iterations> <back_end_nodes> <front_end_cpus>
 ```
 
-**Note:** both datasets must be run with *at least* 2 threads.
+**Note:** both datasets must be run with *at least* 2 threads and the following environment variables must be set:
+`EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS`, `EBBRT_NODE_ALLOCATOR_DEFAULT_RAM` and `EBBRT_NODE_ALLOCATOR_DEFAULT_NUMANODES`. For the small dataset the RAM must be set to at least 4 and the large 64.
 
 ## Example output
 ```
