@@ -400,25 +400,34 @@ void AppMain() {
   reconstruction->InitializeEM();
 
   auto initialReconstructionSeconds = endTimer(startTime);
+  auto beforeAllocation = startTimer();
+
+  auto allocTimeProm = new ebbrt::Promise<float>;
+  auto allocTimeFut = allocTimeProm->GetFuture();
 
   reconstruction->WaitPool().Then(
-    [reconstruction](ebbrt::Future<void> f) {
+    [reconstruction, beforeAllocation, allocTimeProm](ebbrt::Future<void> f) {
+      allocTimeProm->SetValue(endTimer(beforeAllocation));
+
       f.Get();
+
       // Spawn work to backends
       ebbrt::event_manager->Spawn([reconstruction]() {
         reconstruction->Execute();
       });
   });
 
-  reconstruction->ReconstructionDone().Then([reconstruction, startTime, 
-      initialReconstructionSeconds](ebbrt::Future<void> f) {
-    f.Get();
+  auto allocationTime = allocTimeFut.Block().Get();
 
+  reconstruction->ReconstructionDone().Then([reconstruction, startTime, 
+      initialReconstructionSeconds, allocationTime](ebbrt::Future<void> f) {
+    f.Get();
     auto seconds = endTimer(startTime);
 
     reconstruction->GatherBackendTimers();
     reconstruction->GatherFrontendTimers();
 
+    cout << "[Allocation time] " << allocationTime << endl;
     cout << "[Total bytes sent] " << reconstruction->GetTotalBytes() << endl;
     cout << "[Initial reconstruction time] " << initialReconstructionSeconds << endl;
     cout << "[Total time] " << seconds << endl;
