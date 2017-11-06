@@ -224,22 +224,16 @@ void allocateBackends(EbbRef<irtkReconstruction> reconstruction) {
   pool_allocator->waitPool().Then(
     [reconstruction](ebbrt::Future<void> f) {
 
-    struct timeval timeVal3;
-    gettimeofday(&timeVal3, NULL);
-    printf("Inside the lambda  at <%ld.%06ld>\n", (long int)(timeVal3.tv_sec), (long int)(timeVal3.tv_usec));
-
     f.Get();
-
-    struct timeval timeVal5;
-    gettimeofday(&timeVal5, NULL);
-    printf("Inside the lambda  at <%ld.%06ld>\n", (long int)(timeVal5.tv_sec), (long int)(timeVal5.tv_usec));
 
     // Store the nids into reconstruction object
     for (int i=0; i < ARGUMENTS.numBackendNodes; i++) {
       auto nid = pool_allocator->GetNidAt(i);
+
       struct timeval timeVal;
       gettimeofday(&timeVal, NULL);
       printf("ALLOCATING ONE at <%ld.%06ld>\n", (long int)(timeVal.tv_sec), (long int)(timeVal.tv_usec));
+
       reconstruction->AddNid(nid);
     }
   });
@@ -376,7 +370,7 @@ void AppMain() {
 
   auto reconstruction = irtkReconstruction::Create();
 
-  //allocateBackends(reconstruction);
+  allocateBackends(reconstruction);
 
   stacks = getStacks(reconstruction);
   stackTransformations = getTransformations(&templateNumber);
@@ -427,35 +421,22 @@ void AppMain() {
   
   auto initialReconstructionSeconds = endTimer(startTime);
 
-  //cout << "Gather times before Execute() resets " << endl;
-  //reconstruction->GatherFrontendTimers();
-  allocateBackends(reconstruction); 
-
   struct timeval timeVal1;
   gettimeofday(&timeVal1, NULL);
-  printf("Finished Init. recon and starting spwaning at <%ld.%06ld>\n", (long int)(timeVal1.tv_sec), (long int)(timeVal1.tv_usec));
+  printf("Finished Init. recon, waiting for ready nodes at <%ld.%06ld>\n", (long int)(timeVal1.tv_sec), (long int)(timeVal1.tv_usec));
 
   reconstruction->WaitPool().Then(
     [reconstruction](ebbrt::Future<void> f) {
-
-      struct timeval timeVal5;
-      gettimeofday(&timeVal5, NULL);
-      printf("Waiting for a machine to be allocated at <%ld.%06ld>\n", (long int)(timeVal5.tv_sec), (long int)(timeVal5.tv_usec));
-
       f.Get();
 
       struct timeval timeVal6;
       gettimeofday(&timeVal6, NULL);
-      printf("A MACHINE HAS BEEN ALLOCATED  at <%ld.%06ld>\n", (long int)(timeVal6.tv_sec), (long int)(timeVal6.tv_usec));
+      printf("Spawning an Execute() job at <%ld.%06ld>\n", (long int)(timeVal6.tv_sec), (long int)(timeVal6.tv_usec));
 
       // Spawn work to backends
       ebbrt::event_manager->Spawn([reconstruction]() {
         reconstruction->Execute();
       });
-
-      struct timeval timeVal4;
-      gettimeofday(&timeVal4, NULL);
-      printf("A MACHINE HAS BEEN SPAWNED at <%ld.%06ld>\n", (long int)(timeVal4.tv_sec), (long int)(timeVal4.tv_usec));
   });
 
   struct timeval timeVal2;
@@ -466,10 +447,6 @@ void AppMain() {
   reconstruction->ReconstructionDone().Then([reconstruction, startTime, 
       initialReconstructionSeconds, startAfter](ebbrt::Future<void> f) {
     f.Get();
-
-    struct timeval timeVal3;
-    gettimeofday(&timeVal3, NULL);
-    printf("ONE finished recon at  <%ld.%06ld>\n", (long int)(timeVal3.tv_sec), (long int)(timeVal3.tv_usec));
 
     auto endAfter = endTimer(startAfter);
     auto seconds = endTimer(startTime);
