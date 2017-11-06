@@ -15,6 +15,9 @@
 #include <ebbrt/EbbRef.h>
 #include <ebbrt/LocalIdMap.h>
 
+#include <ctime>
+#include <iostream>
+
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
@@ -76,6 +79,7 @@ ebbrt::Future<void> irtkReconstruction::Ping(Messenger::NetworkId nid) {
   auto buf = MakeUniqueIOBuf(sizeof(uint32_t));
   auto dp = buf->GetMutDataPointer();
   dp.Get<uint32_t>() = id + 1; // Ping messages are odd
+  cout << "[Ping] Sending    " << buf->ComputeChainDataLength() << endl;
   SendMessage(nid, std::move(buf));
   std::printf("Ping SetMessage\n");
   return ret;
@@ -158,6 +162,9 @@ void irtkReconstruction::SetParameters(arguments args) {
  * Pool Allocator helper functions
  */
 ebbrt::Future<void> irtkReconstruction::WaitPool() {
+  struct timeval timeVal;
+  gettimeofday(&timeVal, NULL);
+  printf("in WaitPool at <%ld.%06ld>\n", (long int)(timeVal.tv_sec), (long int)(timeVal.tv_usec));
   return std::move(_backendsAllocated.GetFuture());
 }
 
@@ -1000,6 +1007,11 @@ void irtkReconstruction::Gather(string fn) {
   f.Block();
   if (_debug)
     cout << fn << "(): Returned from future" << endl;
+
+  /*time_t _tm =time(NULL );
+  struct tm * curtime = localtime ( &_tm );
+  cout<<"[GATHER] The current date/time is:"<<asctime(curtime);
+  */
 }
 
 void irtkReconstruction::MaskVolume() {
@@ -1037,6 +1049,20 @@ void irtkReconstruction::GatherFrontendTimers() {
   TimeReport("Frontend", _executionTimes);
 }
 
+
+/*void irtkReconstruction::GetCurrentBytes() {
+  for (int i = 0; i < (int) _numBackendNodes; i++) {
+    auto buf = MakeUniqueIOBuf(sizeof(int));
+    auto dp = buf->GetMutDataPointer();
+
+    //#dp.Get<int>() = GATHER_TIMERS;
+
+    printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%");
+    printf(buf->ComputeChainDataLength());
+  }
+}
+*/
+
 void irtkReconstruction::GatherBackendTimers() {
   InitializeTimers(_backendExecutionTimes);
   for (int i = 0; i < (int) _numBackendNodes; i++) {
@@ -1046,6 +1072,7 @@ void irtkReconstruction::GatherBackendTimers() {
     dp.Get<int>() = GATHER_TIMERS; 
 
     _totalBytes += buf->ComputeChainDataLength();
+    cout << "[GatherBackendTimers] Sending    " << buf->ComputeChainDataLength() << endl;
     SendMessage(_nids[i], std::move(buf));
   }
 
@@ -1110,7 +1137,14 @@ void irtkReconstruction::TimeReport(string component, struct timers& t) {
     << t.scaleVolume << endl;
   cout << "[" << component << " time] SliceToVolumeRegistration " 
     << t.sliceToVolumeRegistration << endl;
-  cout << endl;
+
+  auto actual_compute = 0.0;
+  actual_compute += t.coeffInit + t.gaussianReconstruction + t.simulateSlices;
+  actual_compute += t.initializeRobustStatistics + t.eStepI + t.eStepII + t.eStepIII;
+  actual_compute += t.scale + t.superResolution + t.mStep + t.restoreSliceIntensities;
+  actual_compute += t.scaleVolume + t.sliceToVolumeRegistration;
+
+  cout << "[Aggregated " << component << " time (compute?)] " << actual_compute << endl << endl;  
   if (component == "Frontend") {
     cout << "[Reconstruction loop time] " 
       << t.totalExecutionTime << endl;
@@ -1118,16 +1152,47 @@ void irtkReconstruction::TimeReport(string component, struct timers& t) {
 }
 
 void irtkReconstruction::Execute() {
-
+  
+  struct timeval timeVal;
+  gettimeofday(&timeVal, NULL); 
+  printf("In Execute at <%ld.%06ld>\n", (long int)(timeVal.tv_sec), (long int)(timeVal.tv_usec));
+  cout << "$$$$$$$$$$$$$$$$$$$$$ IN EXECUTE $$$$$$$$$$$$$$$$$$$$$" << endl;
+  // FIXME ADDED
+  auto start = startTimer();
+  
   InitializeTimers(_executionTimes);
 
-  auto start = startTimer();
+  // auto start = startTimer();
 
   int recIterations;
+  float time_per_iter [_iterations] = {};
 
   for (int it = 0; it < _iterations; it++) {
-    if (_debug)
+    cout << endl << "Starting Iteration  " << it << endl;
+    auto iter_StartTime = startTimer();
+
+    /*cout << "[Iteration " << it << "] " << endl;
+
+    cout << "%%%% Total Bytes Sent so far" << "%%%%" << endl;
+    cout << _totalBytes << endl;
+   */
+   /*for (int i = 0; i < (int) _numBackendNodes; i++) {
+      auto buf = MakeUniqueIOBuf(sizeof(int));
+      auto dp = buf->GetMutDataPointer();
+
+      //#dp.Get<int>() = GATHER_TIMERS;
+
+      cout << "%%%% Backend # " << i <<  "%%%%" << endl;
+      cout << _totalBytes << endl;
+    }*/
+
+    if (_debug) {
+      cout << endl;
       cout << "[Iteration " << it << "] " << endl;
+      cout << "%%%% Total Bytes Sent so far %%%%" << endl;
+      cout << _totalBytes << endl;
+      cout << endl;
+    }
 
     if (it > 0) {
       SliceToVolumeRegistration();
@@ -1144,23 +1209,44 @@ void irtkReconstruction::Execute() {
           SetSmoothingParameters(lambda);
         lambda *= 2;
       }
+
+    /*cout << endl;
+    cout << "%%%% Total Bytes Sent AFTER" << "%%%%" << endl;
+    cout << _totalBytes << endl;
+    */
+
     }
 
     // Use faster reconstruction for iterations, slower for final reconstruction
     _qualityFactor = lastIteration ? 2 : 1;
 
+    // TODO: time
     InitializeEMValues();
+  
+    time_t _tm =time(NULL );
+    struct tm * curtime = localtime ( &_tm );
+    struct timeval start;
+    gettimeofday(&start, NULL);
+    cout<<"The current date/time is:"<<asctime(curtime);  
 
     CoeffInit(it);
 
+    _tm =time(NULL );
+    curtime = localtime ( &_tm );
+    cout<<"The current date/time is:"<<asctime(curtime);  
+
     GaussianReconstruction();
+
+    _tm =time(NULL );
+    curtime = localtime ( &_tm );
+    cout<<"The current date/time is:"<<asctime(curtime);  
 
     SimulateSlices(true);
 
     InitializeRobustStatistics();
 
     EStep();
-    
+
     // Set number of reconstruction iterations
     if (lastIteration) 
       recIterations = _recIterationsLast;
@@ -1209,24 +1295,61 @@ void irtkReconstruction::Execute() {
     
     MaskVolume();
     // TODO: Do we need to implement Evaluate()
+
+   auto iter_endTime = endTimer(iter_StartTime);
+   time_per_iter[it] = iter_endTime;   
+
+    if (_debug) {
+      cout << endl;
+      cout << "[END OF Iteration " << it << "] " << endl;
+      cout << "%%%% Total Bytes Sent so far %%%%" << endl;
+      cout << _totalBytes << endl;
+      cout << endl;
+    }
   }
 
   RestoreSliceIntensities();
 
+    if (_debug) {
+      cout << endl;
+      cout <<  "AFTER EXECUTE() RESTORE INTENSITIES " << endl;
+      cout << "%%%% Total Bytes Sent so far %%%%" << endl;
+      cout << _totalBytes << endl;
+      cout << endl;
+    }
+
   ScaleVolume();
 
-  auto seconds = endTimer(start);
-  _executionTimes.totalExecutionTime = seconds;
+
+    if (_debug) {
+      cout << endl;
+      cout << "AFTER EXECUTE() SCALE VOLUME" << endl;
+      cout << "%%%% Total Bytes Sent so far %%%%" << endl;
+      cout << _totalBytes << endl;
+      cout << endl;
+    }
+
+    cout << endl;
+    for (int i = 0; i < _iterations; i++) 
+        cout << "ITERATION " << i+1 << " TOOK " << time_per_iter[i] << " SECONDS" << endl;
+    cout << endl;
+
+  // auto seconds = endTimer(start);
+  // _executionTimes.totalExecutionTime = seconds;
     
-  if (_debug) {
+  /*if (_debug) {
     cout << endl;
     PrintImageSums("[End of outer loop]");
     cout << "[End of outer loop time] " << seconds << endl;
-  }
+  }*/
 
   _reconstructed.Write(_outputName.c_str());
 
   _reconstructionDone.SetValue();
+  
+  // FIXME just moved it down 
+  auto seconds = endTimer(start);
+  _executionTimes.totalExecutionTime = seconds;
 }
 
 struct coeffInitParameters irtkReconstruction::createCoeffInitParameters() {
@@ -1308,6 +1431,8 @@ void irtkReconstruction::CoeffInitBootstrap(
     buf->PrependChain(std::move(si));
     _received = 0;
     _totalBytes += buf->ComputeChainDataLength();
+
+    cout << "[CoeffInitBootstrap] Sending    " << buf->ComputeChainDataLength() << endl;
     SendMessage(_nids[i], std::move(buf));
   }
 }
@@ -1325,6 +1450,7 @@ void irtkReconstruction::CoeffInit(struct coeffInitParameters parameters) {
     dp.Get<struct coeffInitParameters>() = parameters;
 
     _totalBytes += buf->ComputeChainDataLength();
+    cout << "[CoeffInit] Sending    " << buf->ComputeChainDataLength() << endl;
     SendMessage(_nids[i], std::move(buf));
   }
 }
@@ -1395,6 +1521,7 @@ void irtkReconstruction::SimulateSlices(bool initialize) {
     buf->PrependChain(std::move(serializeSlice(_reconstructed)));
 
     _totalBytes += buf->ComputeChainDataLength();
+    cout << "[SimulateSlices] Sending    " << buf->ComputeChainDataLength() << endl;
     SendMessage(_nids[i], std::move(buf));
   }
 }
@@ -1448,6 +1575,7 @@ void irtkReconstruction::RestoreSliceIntensities() {
     dp.Get<int>() = RESTORE_SLICE_INTENSITIES;
 
     _totalBytes += buf->ComputeChainDataLength();
+    cout << "[RestoreSliceIntensities] Sending    " << buf->ComputeChainDataLength() << endl;
     SendMessage(_nids[i], std::move(buf));
   }
 }
@@ -1489,6 +1617,7 @@ void irtkReconstruction::SliceToVolumeRegistration() {
     buf->PrependChain(std::move(serializeSlice(_reconstructed)));
 
     _totalBytes += buf->ComputeChainDataLength();
+    cout << "[SliceToVolumeRegistration] Sending    " << buf->ComputeChainDataLength() << endl;
     SendMessage(_nids[i], std::move(buf));
   }
 
@@ -1564,6 +1693,7 @@ void irtkReconstruction::EStepI() {
     buf->PrependChain(std::move(smallSlicesData));
 
     _totalBytes += buf->ComputeChainDataLength();
+    cout << "[EStepI] Sending    " << buf->ComputeChainDataLength() << endl;
     SendMessage(_nids[i], std::move(buf));
   }
   
@@ -1618,6 +1748,7 @@ void irtkReconstruction::EStepII() {
     dp.Get<struct eStepParameters>() = parameters; 
 	
     _totalBytes += buf->ComputeChainDataLength();
+    cout << "[EStepII] Sending    " << buf->ComputeChainDataLength() << endl;
     SendMessage(_nids[i], std::move(buf));
   }
 
@@ -1681,6 +1812,7 @@ void irtkReconstruction::EStepIII() {
     dp.Get<struct eStepParameters>() = parameters; 
 	
     _totalBytes += buf->ComputeChainDataLength();
+    cout << "[EStepIII] Sending    " << buf->ComputeChainDataLength() << endl;
     SendMessage(_nids[i], std::move(buf));
   }
 
@@ -1720,6 +1852,7 @@ void irtkReconstruction::Scale() {
     dp.Get<int>() = SCALE;
 	
     _totalBytes += buf->ComputeChainDataLength();
+    cout << "[Scale] Sending    " << buf->ComputeChainDataLength() << endl;
     SendMessage(_nids[i], std::move(buf));
   }
 
@@ -1934,6 +2067,7 @@ void irtkReconstruction::SuperResolution(int iteration) {
     dp.Get<int>() = iteration;
 	
     _totalBytes += buf->ComputeChainDataLength();
+    cout << "[SuperResolution] Sending    " << buf->ComputeChainDataLength() << endl;
     SendMessage(_nids[i], std::move(buf));
   }
 
@@ -2043,7 +2177,9 @@ void irtkReconstruction::SetSmoothingParameters(double lambda) {
 void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
     std::unique_ptr<IOBuf> &&buffer) {
 
-  _totalBytes += buffer->ComputeChainDataLength();
+  cout << "Receiving  " << buffer->ComputeChainDataLength() << endl;
+ 
+  // _totalBytes += buffer->ComputeChainDataLength();
   auto dp = buffer->GetDataPointer();
   auto fn = dp.Get<int>();
 
@@ -2051,7 +2187,9 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
     case GAUSSIAN_RECONSTRUCTION:
       {
         ReturnFromGaussianReconstruction(dp);
-        break;
+        //cout << "ReturnFromGaussianReconstruction" << endl;
+
+	break;
       }
     case INITIALIZE_ROBUST_STATISTICS:
       {
@@ -2108,5 +2246,5 @@ void irtkReconstruction::ReceiveMessage(Messenger::NetworkId nid,
         cout << "ERROR: ReceiveMessage() invalid option" << endl;
         ebbrt::Cpu::Exit(EXIT_FAILURE);
       }
-  } 
+  }
 }
