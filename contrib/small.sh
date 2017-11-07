@@ -18,4 +18,4 @@ export EBBRT_NODE_ALLOCATOR_DEFAULT_NUMANODES=1
 
 ./build/reconstruction -o 3TStackReconstruction.nii -i data/masked_stack-1.nii data/masked_stack-2.nii data/masked_stack-3.nii  data/masked_stack-4.nii --disableBiasCorrection --useAutoTemplate --useSINCPSF --resolution 2.0 --debug ${DEBUG} --numThreads $1 --useCPU --iterations $2 --numNodes $3 --numFrontEndCpus $4 ${TESTARGS} | tee tmp
 
-/tmp/ebbrt/contrib/clean_running_apps.sh
+~/EbbRT/contrib/clean_running_apps.sh
