@@ -925,7 +925,7 @@ void irtkReconstruction::MaskSlices() {
   }
 }
 
-int irtkReconstruction::GetTotalBytes() {
+uint64_t irtkReconstruction::GetTotalBytes() {
     return _totalBytes;
 }
 

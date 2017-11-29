@@ -111,7 +111,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     int _tsigma;
     int _tmix;
     int _tnum;
-    int _totalBytes;
+    uint64_t _totalBytes;
     int _received;
     int _numSum;
 
@@ -236,7 +236,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
         const vector<irtkRealImage> &probability_maps = vector<irtkRealImage>()
         );
 
-    int GetTotalBytes();
+    uint64_t GetTotalBytes();
 
     void MaskSlices();
 
