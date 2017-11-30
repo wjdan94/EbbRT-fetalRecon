@@ -220,7 +220,7 @@ inline void PrintPhaseHeaders() {
 
 inline void PrintPhasesData(string label, phases_data pd) {
   auto tsum = 0.0;
-  auto dsum = 0;
+  uint64_t dsum = 0;
   cout << label << ",time,";
   for (auto p : pd){
     cout << p.time << ",";
