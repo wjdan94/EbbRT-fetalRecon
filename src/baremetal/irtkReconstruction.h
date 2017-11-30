@@ -107,6 +107,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
 
     // Timer
     struct timers _executionTimes;
+    phases_data _phase_performance;
 
   public:
     // Constructor

@@ -706,6 +706,7 @@ void irtkReconstruction::ReturnFromGaussianReconstruction(
       buf->PrependChain(std::move(serializeSlice(_reconstructed)));
       buf->PrependChain(std::move(serializeSlice(_volumeWeights)));
 
+      _phase_performance[GAUSSIAN_RECONSTRUCTION].sent += buf->ComputeChainDataLength();
       SendMessage(frontEndNid, std::move(buf));
   }, _IOCPU);
 
@@ -866,6 +867,7 @@ void irtkReconstruction::ReturnFromInitializeRobustStatistics(double& sigma,
       dp.Get<int>() = num;
       dp.Get<double>() = sigma;
 
+      _phase_performance[INITIALIZE_ROBUST_STATISTICS].sent += buf->ComputeChainDataLength();
       SendMessage(frontEndNid, std::move(buf));
   }, _IOCPU);
 }
@@ -1161,6 +1163,7 @@ void irtkReconstruction::ReturnFromEStepI(
       dp.Get<int>() = E_STEP_I;
       dp.Get<struct eStepReturnParameters>() = parameters;
 
+      _phase_performance[E_STEP_I].sent += buf->ComputeChainDataLength();
       SendMessage(frontEndNid, std::move(buf));
   }, _IOCPU);
 }
@@ -1175,6 +1178,7 @@ void irtkReconstruction::ReturnFromEStepII(
       dp.Get<int>() = E_STEP_II;
       dp.Get<struct eStepReturnParameters>() = parameters;
 
+      _phase_performance[E_STEP_II].sent += buf->ComputeChainDataLength();
       SendMessage(frontEndNid, std::move(buf));
   }, _IOCPU);
 }
@@ -1189,6 +1193,7 @@ void irtkReconstruction::ReturnFromEStepIII(
       dp.Get<int>() = E_STEP_III;
       dp.Get<struct eStepReturnParameters>() = parameters;
 
+      _phase_performance[E_STEP_III].sent += buf->ComputeChainDataLength();
       SendMessage(frontEndNid, std::move(buf));
   }, _IOCPU);
 }
@@ -1383,6 +1388,7 @@ void irtkReconstruction::ReturnFromSuperResolution(
       buf->PrependChain(std::move(serializeSlice(_addon)));
       buf->PrependChain(std::move(serializeSlice(_confidenceMap)));
 
+      _phase_performance[SUPERRESOLUTION].sent += buf->ComputeChainDataLength();
       SendMessage(frontEndNid, std::move(buf));
   }, _IOCPU);
 }
@@ -1498,6 +1504,7 @@ void irtkReconstruction::ReturnFromMStep(mStepReturnParameters& parameters,
       auto dp = buf->GetMutDataPointer();
       dp.Get<int>() = M_STEP;
       dp.Get<mStepReturnParameters>() = parameters;
+      _phase_performance[M_STEP].sent += buf->ComputeChainDataLength();
       SendMessage(frontEndNid, std::move(buf));
   }, _IOCPU);
 }
@@ -1566,6 +1573,7 @@ void irtkReconstruction::ReturnFromScaleVolume(
       auto dp = buf->GetMutDataPointer();
       dp.Get<int>() = SCALE_VOLUME;
       dp.Get<scaleVolumeParameters>() = parameters;
+      _phase_performance[SCALE_VOLUME].sent += buf->ComputeChainDataLength();
       SendMessage(frontEndNid, std::move(buf));
   }, _IOCPU);
 
@@ -1687,6 +1695,7 @@ void irtkReconstruction::ReturnFromSliceToVolumeRegistration(
       //all of them
       buf->PrependChain(std::move(serializeTransformations(_transformations)));
 
+      _phase_performance[SLICE_TO_VOLUME_REGISTRATION].sent += buf->ComputeChainDataLength();
       SendMessage(frontEndNid, std::move(buf));
   }, _IOCPU);
 }
@@ -1699,6 +1708,7 @@ void irtkReconstruction::ReturnFrom(int fn, Messenger::NetworkId frontEndNid) {
         auto buf = MakeUniqueIOBuf(sizeof(int));
         auto dp = buf->GetMutDataPointer();
         dp.Get<int>() = fn;
+        _phase_performance[fn].sent += sizeof(int); 
         SendMessage(frontEndNid, std::move(buf));
   }, _IOCPU);
 }
@@ -1720,16 +1730,18 @@ void irtkReconstruction::InitializeTimers() {
 }
 
 void irtkReconstruction::SendTimers(Messenger::NetworkId frontEndNid) {
-  
+
   ebbrt::event_manager->SpawnRemote(
-      [this,frontEndNid]() {
-      auto buf = MakeUniqueIOBuf(sizeof(int) + sizeof(struct timers));
-      auto dp = buf->GetMutDataPointer();
-      dp.Get<int>() = GATHER_TIMERS;
-      dp.Get<struct timers>() = _executionTimes;
-  
-      SendMessage(frontEndNid, std::move(buf));
-  }, _IOCPU);
+      [this, frontEndNid]() {
+        auto buf =
+            MakeUniqueIOBuf(sizeof(int) + sizeof(struct timers) + sizeof(phases_data));
+        auto dp = buf->GetMutDataPointer();
+        dp.Get<int>() = GATHER_TIMERS;
+        dp.Get<struct timers>() = _executionTimes;
+        dp.Get<phases_data>() = _phase_performance;
+        SendMessage(frontEndNid, std::move(buf));
+      },
+      _IOCPU);
 }
 
 void irtkReconstruction::ExecuteCoeffInit(ebbrt::IOBuf::DataPointer& dp, 
@@ -1739,6 +1751,7 @@ void irtkReconstruction::ExecuteCoeffInit(ebbrt::IOBuf::DataPointer& dp,
   CoeffInit(dp, cpu);
   auto seconds = endTimer(start);
   _executionTimes.coeffInit += seconds;
+  _phase_performance[COEFF_INIT].time += seconds; 
 
   if (_debug) {
     cout << "[CoeffInit output] _averageVolumeWeight: " 
@@ -1759,6 +1772,7 @@ void irtkReconstruction::ExecuteGaussianReconstruction(
   ReturnFromGaussianReconstruction(frontEndNid);
   auto seconds = endTimer(start);
   _executionTimes.gaussianReconstruction += seconds;
+  _phase_performance[GAUSSIAN_RECONSTRUCTION].time += seconds; 
 
   if (_debug) {
     PrintImageSums("[GaussianReconstruction output]");
@@ -1774,6 +1788,7 @@ int irtkReconstruction::ExecuteSimulateSlices(ebbrt::IOBuf::DataPointer& dp) {
   auto initialize = SimulateSlices(dp);
   auto seconds = endTimer(start);
   _executionTimes.simulateSlices += seconds;
+  _phase_performance[SIMULATE_SLICES].time += seconds; 
 
   if (_debug) {
     PrintImageSums("[SimulateSlices output]");
@@ -1791,6 +1806,7 @@ void irtkReconstruction::ExecuteInitializeRobustStatistics(Messenger::NetworkId 
   ReturnFromInitializeRobustStatistics(sigma, num, frontEndNid);
   auto seconds = endTimer(start);
   _executionTimes.initializeRobustStatistics += seconds;
+  _phase_performance[INITIALIZE_ROBUST_STATISTICS].time += seconds; 
 
   if (_debug) {
     cout << "[InitializeRobustStatistics output] sigma: " << sigma << endl;
@@ -1806,6 +1822,7 @@ void irtkReconstruction::ExecuteMStep(Messenger::NetworkId frontEndNid) {
   ReturnFromMStep(parameters, frontEndNid);
   auto seconds = endTimer(start);
   _executionTimes.mStep += seconds;
+  _phase_performance[M_STEP].time += seconds; 
           
   if (_debug) {
     cout << "[MStep output] sigma: " << parameters.sigma << endl;
@@ -1825,6 +1842,7 @@ void irtkReconstruction::ExecuteEStepI(ebbrt::IOBuf::DataPointer& dp,
   ReturnFromEStepI(parameters, frontEndNid);
   auto seconds = endTimer(start);
   _executionTimes.eStepI += seconds;
+  _phase_performance[E_STEP_I].time += seconds; 
 
   if (_debug)
     cout << "[EStepI time] " << seconds << endl;
@@ -1839,6 +1857,7 @@ void irtkReconstruction::ExecuteEStepII(ebbrt::IOBuf::DataPointer& dp,
 
   auto seconds = endTimer(start);
   _executionTimes.eStepII += seconds;
+  _phase_performance[E_STEP_II].time += seconds; 
 
   if (_debug)
     cout << "[EStepII time] " << seconds << endl;
@@ -1852,6 +1871,7 @@ void irtkReconstruction::ExecuteEStepIII(ebbrt::IOBuf::DataPointer& dp,
   ReturnFromEStepIII(parameters, frontEndNid);
   auto seconds = endTimer(start);
   _executionTimes.eStepIII += seconds;
+  _phase_performance[E_STEP_III].time += seconds; 
 
   if (_debug)
     cout << "[EStepIII time] " << seconds << endl;
@@ -1864,6 +1884,7 @@ void irtkReconstruction::ExecuteScale(Messenger::NetworkId frontEndNid) {
   ReturnFrom(SCALE, frontEndNid);
   auto seconds = endTimer(start);
   _executionTimes.scale += seconds;
+  _phase_performance[SCALE].time += seconds; 
 
   if (_debug) {
     PrintImageSums("[Scale output]");
@@ -1879,6 +1900,7 @@ void irtkReconstruction::ExecuteSuperResolution(ebbrt::IOBuf::DataPointer& dp,
   ReturnFromSuperResolution(frontEndNid);
   auto seconds = endTimer(start);
   _executionTimes.superResolution += seconds;
+  _phase_performance[SUPERRESOLUTION].time += seconds; 
 
   if (_debug) {
     cout << fixed << "[SuperResolution output] _addon: " 
@@ -1895,6 +1917,7 @@ void irtkReconstruction::ExecuteRestoreSliceIntensities() {
   RestoreSliceIntensities();
   auto seconds = endTimer(start);
   _executionTimes.restoreSliceIntensities += seconds;
+  _phase_performance[RESTORE_SLICE_INTENSITIES].time += seconds; 
 
   if (_debug)
     cout << "[RestoreSliceIntensities time] " << seconds << endl;
@@ -1907,6 +1930,7 @@ void irtkReconstruction::ExecuteScaleVolume(Messenger::NetworkId nid) {
   ReturnFromScaleVolume(parameters, nid);
   auto seconds = endTimer(start);
   _executionTimes.scaleVolume += seconds;
+  _phase_performance[SCALE_VOLUME].time += seconds; 
 
   if (_debug)
     cout << "[ScaleVolume time] " << seconds << endl;
@@ -1920,6 +1944,7 @@ void irtkReconstruction::ExecuteSliceToVolumeRegistration(
   ReturnFromSliceToVolumeRegistration(frontEndNid);
   auto seconds = endTimer(start);
   _executionTimes.sliceToVolumeRegistration += seconds;
+  _phase_performance[SLICE_TO_VOLUME_REGISTRATION].time += seconds; 
 
   if (_debug)
     cout << "[SliceToVolumeRegistration time] " << seconds << endl;
@@ -1937,8 +1962,11 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
   ebbrt::event_manager->SpawnRemote(
     [this, buffer = std::move(buffer), nid, nidStr, cpu]() {
 
+    auto len = buffer->ComputeChainDataLength();
     auto dp = buffer->GetDataPointer();
     auto fn = dp.Get<int>();
+    if (fn < WORK_PHASES)
+      _phase_performance[fn].recv += len; 
 
     if (_debug) {
       cout << "Receiving function: " << fn << " on CPU: " 

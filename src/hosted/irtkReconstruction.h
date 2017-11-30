@@ -69,6 +69,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     bool _debug; 
     bool _disableBiasCorr; 
 
+    phases_data _phase_performance;
+    std::vector<phases_data> _backend_performance;
     struct timers _executionTimes;
     struct timers _backendExecutionTimes;
 
@@ -347,7 +349,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
 
     void GatherFrontendTimers();
 
-    void TimeReport(string component, struct timers& t);
+    void PerfReport(string component, phases_data t);
 
     void InitializeTimers(struct timers& t);
 

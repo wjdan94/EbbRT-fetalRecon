@@ -25,11 +25,19 @@
 #define PING 100
 
 
+#define WORK_PHASES 13
+
 #include <sys/time.h>
 #include <string>
 #include <vector>
+#include <array>
+#include <iostream>
 
 using namespace std;
+
+typedef std::array<struct phase_data, WORK_PHASES> phases_data;
+
+static const std::string PhaseNames[] = { "coeffInit", "gaussianReconstruction", "simulateSlices", "initializeRobustStatistics", "eStepI", "eStepII", "eStepIII", "scale", "superResolution", "mStep", "restoreSliceIntensities", "scaleVolume", "sliceToVolumeRegistration"};
 
 typedef struct unsigned_three {
   unsigned int x, y, z;
@@ -166,6 +174,12 @@ struct scaleVolumeParameters {
   double den;
 };
 
+struct phase_data {
+  float time = 0.0;
+  uint32_t sent = 0;
+  uint32_t recv = 0;
+};
+
 struct timers {
   float coeffInit;
   float gaussianReconstruction;
@@ -195,6 +209,37 @@ inline float endTimer(struct timeval start) {
   float seconds = (end.tv_sec - start.tv_sec) + 
     ((end.tv_usec - start.tv_usec) / 1000000.0);
   return seconds;
+}
+
+inline void PrintPhaseHeaders() {
+  cout << ",,";
+  for( auto s : PhaseNames )
+    cout << s << ",";
+  cout << "sum" << endl;
+}
+
+inline void PrintPhasesData(string label, phases_data pd) {
+  auto tsum = 0.0;
+  auto dsum = 0;
+  cout << label << ",time,";
+  for (auto p : pd){
+    cout << p.time << ",";
+    tsum += p.time;
+  }
+  cout << tsum << endl;
+  cout << label << ",sent,";
+  for (auto p : pd){
+    cout << p.sent << ",";
+    dsum += p.sent;
+  }
+  cout << dsum << endl;
+  dsum = 0.0;
+  cout << label << ",recv,";
+  for (auto p : pd){
+    cout << p.recv << ",";
+    dsum += p.recv;
+  }
+  cout << dsum << endl;
 }
 
 #endif // end of UTILS_H

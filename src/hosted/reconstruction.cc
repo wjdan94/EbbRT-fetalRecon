@@ -462,13 +462,13 @@ void AppMain() {
     f.Get();
     auto seconds = endTimer(startTime);
 
+    PrintPhaseHeaders();
     reconstruction->GatherBackendTimers();
     reconstruction->GatherFrontendTimers();
 
     cout << "[Allocation time] " << allocationTime << endl;
-    cout << "[Total bytes sent] " << reconstruction->GetTotalBytes() << endl;
     cout << "[Initial reconstruction time] " << initialReconstructionSeconds << endl;
-    cout << "[Total time] " << seconds << endl;
+    cout << "[Total reconstruction time] " << seconds << endl;
     reconstruction->PrintImageSums("[checksum]");
     //TODO: uncomment this line once everything works.
     ebbrt::Cpu::Exit(EXIT_SUCCESS);
