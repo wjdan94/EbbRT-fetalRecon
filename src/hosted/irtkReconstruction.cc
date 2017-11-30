@@ -340,27 +340,8 @@ void irtkReconstruction::ReturnFromSliceToVolumeRegistration(
 
 void irtkReconstruction::ReturnFromGatherTimers(
     ebbrt::IOBuf::DataPointer & dp) {
-  auto times = dp.Get<struct timers>();
   auto phases = dp.Get<phases_data>();
   _backend_performance.emplace_back(phases);
-
-  _backendExecutionTimes.coeffInit += times.coeffInit;
-  _backendExecutionTimes.gaussianReconstruction += times.gaussianReconstruction;
-  _backendExecutionTimes.simulateSlices += times.simulateSlices;
-  _backendExecutionTimes.initializeRobustStatistics += 
-    times.initializeRobustStatistics;
-  _backendExecutionTimes.eStepI += times.eStepI;
-  _backendExecutionTimes.eStepII += times.eStepII;
-  _backendExecutionTimes.eStepIII += times.eStepIII;
-  _backendExecutionTimes.scale += times.scale;
-  _backendExecutionTimes.superResolution += times.superResolution;
-  _backendExecutionTimes.mStep += times.mStep;
-  _backendExecutionTimes.restoreSliceIntensities += 
-    times.restoreSliceIntensities;
-  _backendExecutionTimes.scaleVolume += times.scaleVolume;
-  _backendExecutionTimes.sliceToVolumeRegistration += 
-    times.sliceToVolumeRegistration;
-
   ReturnFrom();
 }
 
@@ -1024,32 +1005,15 @@ void irtkReconstruction::MaskVolume() {
     PrintImageSums("[MaskVolume output]");
 }
 
-void irtkReconstruction::InitializeTimers(struct timers& t) {
-  t.coeffInit = 0.0;
-  t.gaussianReconstruction = 0.0;
-  t.simulateSlices = 0.0;
-  t.initializeRobustStatistics = 0.0;
-  t.eStepI = 0.0;
-  t.eStepII = 0.0;
-  t.eStepIII = 0.0;
-  t.scale = 0.0;
-  t.superResolution = 0.0;
-  t.mStep = 0.0;
-  t.restoreSliceIntensities = 0.0;
-  t.scaleVolume = 0.0;
-  t.sliceToVolumeRegistration = 0.0;
-  t.totalExecutionTime = 0.0;
-}
-
 void irtkReconstruction::GatherFrontendTimers() {
   PrintPhasesData("fe", _phase_performance);
 }
 
 void irtkReconstruction::GatherBackendTimers() {
+<<<<<<< b0a72fc49092ce10b011485fae972ef96f431578
 
   cout << "In GatherBackendTimers()" << endl;
 
-  InitializeTimers(_backendExecutionTimes);
   for (int i = 0; i < (int) _numBackendNodes; i++) {
 
     auto index = _frontEnd_cpus_map[_nids[i].ToString()];   // get the cpu index
@@ -1073,33 +1037,6 @@ void irtkReconstruction::GatherBackendTimers() {
 
   Gather("GatherBackendTimers");
 
-  _backendExecutionTimes.coeffInit = 
-    _backendExecutionTimes.coeffInit / _numBackendNodes;
-  _backendExecutionTimes.gaussianReconstruction = 
-    _backendExecutionTimes.gaussianReconstruction / _numBackendNodes;
-  _backendExecutionTimes.simulateSlices = 
-    _backendExecutionTimes.simulateSlices / _numBackendNodes;
-  _backendExecutionTimes.initializeRobustStatistics = 
-    _backendExecutionTimes.initializeRobustStatistics / _numBackendNodes;
-  _backendExecutionTimes.eStepI = 
-    _backendExecutionTimes.eStepI / _numBackendNodes;
-  _backendExecutionTimes.eStepII = 
-    _backendExecutionTimes.eStepII / _numBackendNodes;
-  _backendExecutionTimes.eStepIII = 
-    _backendExecutionTimes.eStepIII / _numBackendNodes;
-  _backendExecutionTimes.scale = 
-    _backendExecutionTimes.scale / _numBackendNodes;
-  _backendExecutionTimes.superResolution = 
-    _backendExecutionTimes.superResolution / _numBackendNodes;
-  _backendExecutionTimes.mStep = 
-    _backendExecutionTimes.mStep / _numBackendNodes;
-  _backendExecutionTimes.restoreSliceIntensities = 
-    _backendExecutionTimes.restoreSliceIntensities / _numBackendNodes;
-  _backendExecutionTimes.scaleVolume = 
-    _backendExecutionTimes.scaleVolume / _numBackendNodes;
-  _backendExecutionTimes.sliceToVolumeRegistration = 
-    _backendExecutionTimes.sliceToVolumeRegistration / _numBackendNodes;
-
   auto cnt = 0;
   for( auto b : _backend_performance){
     PrintPhasesData("be_"+std::to_string(cnt), b);
@@ -1107,26 +1044,9 @@ void irtkReconstruction::GatherBackendTimers() {
   }
 }
 
-void irtkReconstruction::PerfReport(string component, phases_data pd) {
-  auto totalTime = 0;
-  auto totalDataSent = 0;
-  auto totalDataRecv = 0;
-  for (auto p : pd ) {
-    totalTime += p.time;
-    totalDataSent += p.sent;
-    totalDataRecv += p.recv;
-  }
-  cout << component << " Total Time: " << totalTime << endl;
-  cout << component << " Total Data Sent: " << totalDataSent << endl;
-  cout << component << " Total Data Recv: " << totalDataRecv << endl;
-}
-
 void irtkReconstruction::Execute() {
 
   cout << "In Execute() on CPU: " << ebbrt::Cpu::GetMine() << endl;
-
-  InitializeTimers(_executionTimes);
-
   auto start = startTimer();
 
   int recIterations;
@@ -1222,7 +1142,6 @@ void irtkReconstruction::Execute() {
   ScaleVolume();
 
   auto seconds = endTimer(start);
-  _executionTimes.totalExecutionTime = seconds;
     
   if (_debug) {
     cout << endl;

@@ -106,7 +106,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     irtkRealImage _confidenceMap;
 
     // Timer
-    struct timers _executionTimes;
     phases_data _phase_performance;
 
   public:
@@ -255,9 +254,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
     void ReturnFromSliceToVolumeRegistration(Messenger::NetworkId nid);
     
     void ReturnFrom(int fn, ebbrt::Messenger::NetworkId frontEndNid);
-
-    // Timers
-    void InitializeTimers();
 
     void SendTimers(ebbrt::Messenger::NetworkId frontEndNid);
 

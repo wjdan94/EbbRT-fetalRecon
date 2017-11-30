@@ -71,8 +71,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
 
     phases_data _phase_performance;
     std::vector<phases_data> _backend_performance;
-    struct timers _executionTimes;
-    struct timers _backendExecutionTimes;
 
     // Internal parameters
     ebbrt::Promise<void> _reconstructionDone;
@@ -348,10 +346,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     void GatherBackendTimers();
 
     void GatherFrontendTimers();
-
-    void PerfReport(string component, phases_data t);
-
-    void InitializeTimers(struct timers& t);
 
     void Execute();
 
