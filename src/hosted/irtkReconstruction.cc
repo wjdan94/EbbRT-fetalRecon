@@ -980,7 +980,8 @@ void irtkReconstruction::InitializeEM() {
   }
 }
 
-void irtkReconstruction::Gather(string fn) {
+float irtkReconstruction::Gather(string fn) {
+  auto t = startTimer();
   _future = ebbrt::Promise<int>();
   auto f = _future.GetFuture();
   if (_debug)
@@ -989,6 +990,7 @@ void irtkReconstruction::Gather(string fn) {
   f.Block();
   if (_debug)
     cout << fn << "(): Returned from future" << endl;
+  return endTimer(t);
 }
 
 void irtkReconstruction::MaskVolume() {
@@ -1010,7 +1012,6 @@ void irtkReconstruction::GatherFrontendTimers() {
 }
 
 void irtkReconstruction::GatherBackendTimers() {
-<<<<<<< b0a72fc49092ce10b011485fae972ef96f431578
 
   cout << "In GatherBackendTimers()" << endl;
 
@@ -1321,7 +1322,8 @@ void irtkReconstruction::GaussianReconstruction() {
   _volumeWeights.Initialize(_reconstructed.GetImageAttributes());
   _volumeWeights = 0;
 
-  Gather("CoeffInit & GaussianReconstruction");
+  _phase_performance[GAUSSIAN_RECONSTRUCTION].wait +=
+      Gather("CoeffInit & GaussianReconstruction");
 
   _reconstructed /= _volumeWeights;
 
@@ -1376,7 +1378,7 @@ void irtkReconstruction::MStep(int iteration) {
   _mMax = 0.0;
   _mNum = 0.0;
 
-  Gather("Simulate Slices & MStep");
+  _phase_performance[M_STEP].wait += Gather("Simulate Slices & MStep");
 
   if (_mMix > 0) {
     _sigmaCPU = _mSigma / _mMix;
@@ -1438,7 +1440,7 @@ void irtkReconstruction::ScaleVolume() {
   _num = 0;
   _den = 0;
 
-  Gather("ScaleVolume");
+  _phase_performance[SCALE_VOLUME].wait += Gather("ScaleVolume");
 
   double scale = _num / _den;
   irtkRealPixel *ptr = _reconstructed.GetPointerToVoxels();
@@ -1483,7 +1485,8 @@ void irtkReconstruction::SliceToVolumeRegistration() {
     }, ctxt);
   }
 
-  Gather("SliceToVolumeRegistration");
+  _phase_performance[GAUSSIAN_RECONSTRUCTION].wait +=
+      Gather("SliceToVolumeRegistration");
 
   auto seconds = endTimer(start);
   _phase_performance[GAUSSIAN_RECONSTRUCTION].time += seconds;
@@ -1499,7 +1502,8 @@ void irtkReconstruction::InitializeRobustStatistics() {
   _sigmaSum = 0;
   _numSum = 0;
 
-  Gather("Simulate Slices & InitializeRobustStatistics");
+  _phase_performance[INITIALIZE_ROBUST_STATISTICS].wait +=
+      Gather("Simulate Slices & InitializeRobustStatistics");
 
   _sigmaCPU = _sigmaSum / _numSum;
   _sigmaSCPU = 0.025;
@@ -1572,7 +1576,7 @@ void irtkReconstruction::EStepI() {
     }, ctxt);
   }
   
-  Gather("EStepI");
+  _phase_performance[E_STEP_I].wait += Gather("EStepI");
 
   if (_den > 0)
     _meanSCPU = _sum / _den;
@@ -1638,7 +1642,7 @@ void irtkReconstruction::EStepII() {
     }, ctxt);
   }
 
-  Gather("EStepII");
+  _phase_performance[E_STEP_II].wait += Gather("EStepII");
 
   // [fetalRecontruction] do not allow too small sigma
   if ((_sum > 0) && (_den > 0)) {
@@ -1713,7 +1717,7 @@ void irtkReconstruction::EStepIII() {
     }, ctxt);
   }
 
-  Gather("EStepIII");
+  _phase_performance[E_STEP_III].wait += Gather("EStepIII");
 
   if (_num > 0)
     _mixSCPU = _sum / _num;
@@ -1764,7 +1768,7 @@ void irtkReconstruction::Scale() {
     }, ctxt);
   }
 
-  Gather("Scale");
+  _phase_performance[SCALE].wait += Gather("Scale");
 
   auto seconds = endTimer(start);
   _phase_performance[SCALE].time += seconds;
@@ -1990,7 +1994,7 @@ void irtkReconstruction::SuperResolution(int iteration) {
     }, ctxt);
   }
 
-  Gather("SuperResolution");
+  _phase_performance[SUPERRESOLUTION].wait += Gather("SuperResolution");
 
   if (!_adaptive)
     for (int i = 0; i < _addon.GetX(); i++) {

@@ -37,7 +37,19 @@ using namespace std;
 
 typedef std::array<struct phase_data, WORK_PHASES> phases_data;
 
-static const std::string PhaseNames[] = { "coeffInit", "gaussianReconstruction", "simulateSlices", "initializeRobustStatistics", "eStepI", "eStepII", "eStepIII", "scale", "superResolution", "mStep", "restoreSliceIntensities", "scaleVolume", "sliceToVolumeRegistration"};
+static const std::string PhaseNames[] = {"coeffInit",
+                                         "gaussianReconstruction",
+                                         "simulateSlices",
+                                         "initializeRobustStatistics",
+                                         "eStepI",
+                                         "eStepII",
+                                         "eStepIII",
+                                         "scale",
+                                         "superResolution",
+                                         "mStep",
+                                         "restoreSliceIntensities",
+                                         "scaleVolume",
+                                         "sliceToVolumeRegistration"};
 
 typedef struct unsigned_three {
   unsigned int x, y, z;
@@ -176,6 +188,7 @@ struct scaleVolumeParameters {
 
 struct phase_data {
   float time = 0.0;
+  float wait = 0.0;
   uint32_t sent = 0;
   uint32_t recv = 0;
 };
@@ -227,13 +240,20 @@ inline void PrintPhasesData(string label, phases_data pd) {
     tsum += p.time;
   }
   cout << tsum << endl;
+  tsum = 0.0;
+  cout << label << ",wait,";
+  for (auto p : pd){
+    cout << p.wait << ",";
+    tsum += p.wait;
+  }
+  cout << tsum << endl;
   cout << label << ",sent,";
   for (auto p : pd){
     cout << p.sent << ",";
     dsum += p.sent;
   }
   cout << dsum << endl;
-  dsum = 0.0;
+  dsum = 0;
   cout << label << ",recv,";
   for (auto p : pd){
     cout << p.recv << ",";

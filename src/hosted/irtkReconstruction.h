@@ -249,7 +249,7 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     struct reconstructionParameters CreateReconstructionParameters(
         int start, int end);
 
-    void Gather(string fn);
+    float Gather(string fn);
 
     void ReturnFrom();
 
