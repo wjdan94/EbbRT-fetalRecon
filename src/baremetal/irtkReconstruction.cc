@@ -55,28 +55,14 @@ EbbRef<irtkReconstruction> irtkReconstruction::Create(EbbId id) {
   return EbbRef<irtkReconstruction>(id);
 }
 
-ebbrt::Future<void> irtkReconstruction::Ping(Messenger::NetworkId nid) {
-  uint32_t id;
-  Promise<void> promise;
-  auto ret = promise.GetFuture();
-  {
-    std::lock_guard<std::mutex> guard(_m);
-    id = _id; // Get a new id (always even)
-    _id += 2;
-
-    bool inserted;
-    // insert our promise into the hash table
-    std::tie(std::ignore, inserted) =
-      _promise_map.emplace(id, std::move(promise));
-    assert(inserted);
-  }
+void irtkReconstruction::Ping(Messenger::NetworkId nid) {
   // Construct and send the ping message
   auto buf = MakeUniqueIOBuf(sizeof(uint32_t));
   auto dp = buf->GetMutDataPointer();
-  dp.Get<uint32_t>() = id + 1; // Ping messages are odd
+
+  dp.Get<int>() = PING;
   SendMessage(nid, std::move(buf));
   std::printf("Ping SetMessage\n");
-  return ret;
 }
 
 void irtkReconstruction::ResetOrigin(
@@ -183,6 +169,8 @@ void irtkReconstruction::DefineWorkers() {
 
 void irtkReconstruction::CoeffInitBootstrap(ebbrt::IOBuf::DataPointer& dp, 
     size_t cpu) {
+
+  cout << "In CoeffInitBootstrap() with IO_CPU " << cpu << endl;
 
   InitializeTimers();
 
@@ -697,7 +685,9 @@ void irtkReconstruction::GaussianReconstruction() {
 
 void irtkReconstruction::ReturnFromGaussianReconstruction(
     Messenger::NetworkId frontEndNid) {
-  
+
+  cout << "In ReturnFromGaussianReconstruction() to send back to " << frontEndNid.ToString() << " from IO Core: " << _IOCPU << endl;
+
   ebbrt::event_manager->SpawnRemote(
       [this,frontEndNid]() {
  
@@ -1761,6 +1751,9 @@ void irtkReconstruction::ExecuteCoeffInit(ebbrt::IOBuf::DataPointer& dp,
 void irtkReconstruction::ExecuteGaussianReconstruction(
     Messenger::NetworkId frontEndNid) {
 
+
+  cout << "In ExecuteGaussianReconstruction() with frontEnd network " << frontEndNid.ToString() << endl;
+
   auto start = startTimer();
   GaussianReconstruction();
   ReturnFromGaussianReconstruction(frontEndNid);
@@ -1938,8 +1931,11 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
 
   auto targetCpu = (cpu + 1) % ebbrt::Cpu::Count();
 
+  string nidStr = nid.ToString();
+  cout << "Receiving message on network: " << nid.ToString() << " data of size: " << buffer->ComputeChainDataLength() << endl;
+
   ebbrt::event_manager->SpawnRemote(
-    [this, buffer = std::move(buffer), nid, cpu]() {
+    [this, buffer = std::move(buffer), nid, nidStr, cpu]() {
 
     auto dp = buffer->GetDataPointer();
     auto fn = dp.Get<int>();
@@ -2003,6 +1999,11 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
       case GATHER_TIMERS:
         {
           SendTimers(nid);
+          break;
+        }
+      case PING:
+        {
+          cout << "recevied ping message from " << nidStr << endl;
           break;
         }
       default:

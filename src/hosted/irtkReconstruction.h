@@ -24,6 +24,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
   public irtkObject {
 
   private:
+    std::unordered_map<string, size_t> _frontEnd_cpus_map;   // maps str(ip) to cpu index
+
     // Ebb creation parameters 
     std::unordered_map<uint32_t, ebbrt::Promise<void>> _promise_map;
     std::mutex _m;
@@ -174,7 +176,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
 
     static irtkReconstruction& HandleFault(ebbrt::EbbId id);
 
-    ebbrt::Future<void> Ping(ebbrt::Messenger::NetworkId nid);
+    //ebbrt::Future<void> Ping(ebbrt::Messenger::NetworkId nid);
+    void Ping(ebbrt::Messenger::NetworkId nid);
 
     // EbbRT-related functions
     void ReceiveMessage(ebbrt::Messenger::NetworkId nid,

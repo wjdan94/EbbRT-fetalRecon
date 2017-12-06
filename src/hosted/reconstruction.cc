@@ -198,6 +198,8 @@ vector<irtkRealImage> getStacks(EbbRef<irtkReconstruction> reconstruction) {
 
 void allocateBackends(EbbRef<irtkReconstruction> reconstruction) {
 
+  cout << "In allocateBackends() on CPU: " << ebbrt::Cpu::GetMine() << endl; 
+
   if (ARGUMENTS.debug) {
     std::cout << "Allocating backend nodes" << std::endl;
   }
@@ -215,7 +217,10 @@ void allocateBackends(EbbRef<irtkReconstruction> reconstruction) {
 
   pool_allocator->waitPool().Then(
     [reconstruction](ebbrt::Future<void> f) {
+
+    cout << "Inside pool_allocator->waitPool().Then() on CPU: " << ebbrt::Cpu::GetMine() << endl;
     f.Get();
+
     // Store the nids into reconstruction object
     for (int i=0; i < ARGUMENTS.numBackendNodes; i++) {
       auto nid = pool_allocator->GetNidAt(i);
@@ -338,19 +343,18 @@ void eraseInputStackTuner(vector<irtkRealImage> stacks,
   }
 }
 
-void AppMain() {
 
+void initialReconstruction(EbbRef<irtkReconstruction> reconstruction, ebbrt::Promise<float>* promise) {
   auto startTime = startTimer();
 
+  cout << "In Init. Reconstruction on CPU: " << ebbrt::Cpu::GetMine() << endl;
+ 
   int templateNumber = -1;
 
   irtkRealImage* mask;
 
   vector<irtkRealImage> stacks;
   vector<irtkRigidTransformation> stackTransformations;
-
-  auto reconstruction = irtkReconstruction::Create();
-  allocateBackends(reconstruction);
 
   stacks = getStacks(reconstruction);
   stackTransformations = getTransformations(&templateNumber);
@@ -368,23 +372,23 @@ void AppMain() {
   // Create template volume with isotropic resolution if resolution==0 
   // it will be determined from in-plane resolution of the image
   ARGUMENTS.resolution =
-    reconstruction->CreateTemplate(stacks[templateNumber], 
+    reconstruction->CreateTemplate(stacks[templateNumber],
         ARGUMENTS.resolution);
 
   // Set mask to reconstruction object.
   reconstruction->SetMask(mask, ARGUMENTS.smoothMask);
 
-  volumetricRegistration(reconstruction, 
+  volumetricRegistration(reconstruction,
       stacks, stackTransformations, templateNumber);
 
   // Mask is transformed to the all other stacks and they are cropped
   applyMask(reconstruction, stacks, stackTransformations, templateNumber);
 
-  volumetricRegistration(reconstruction, 
+  volumetricRegistration(reconstruction,
       stacks, stackTransformations, templateNumber);
   // Rescale intensities of the stacks to have the same average
   reconstruction->MatchStackIntensitiesWithMasking(
-      stacks, stackTransformations, ARGUMENTS.averageValue, 
+      stacks, stackTransformations, ARGUMENTS.averageValue,
       !ARGUMENTS.intensityMatching);
 
   // Create slices and slice-dependent transformations
@@ -399,25 +403,59 @@ void AppMain() {
   // Initialize data structures for EM
   reconstruction->InitializeEM();
 
-  auto initialReconstructionSeconds = endTimer(startTime);
-  auto beforeAllocation = startTimer();
+  auto tot = endTimer(startTime);
+  promise->SetValue(tot);
 
+  cout << "Finished Initial Recon" << endl;
+  cout << "Time is : " << tot << endl;
+} 
+
+
+void AppMain() {
+
+  auto startTime = startTimer();
+
+  // Defining front-end workers
+  int cpu_num = ebbrt::Cpu::GetPhysCpus();
+  _FeIOCPU = ebbrt::Cpu::GetMine();
+  _InitReconCPU = (_FeIOCPU + 1) % cpu_num;
+ 
+  cout << "Starting the App on CPU: " << _FeIOCPU << endl;
+
+  auto reconstruction = irtkReconstruction::Create();
+  allocateBackends(reconstruction);
+
+  // to capture the Init Recon time
+  auto finishedInitRecon = new ebbrt::Promise<float>;
+  auto finishedInitReconFut = finishedInitRecon->GetFuture(); 
+
+  auto cpu_i = ebbrt::Cpu::GetByIndex(_InitReconCPU);
+  auto ctxt = cpu_i->get_context();
+
+  cout << "Init. Reconstruction spawned to " << _InitReconCPU << endl;
+
+  ebbrt::event_manager->SpawnRemote([reconstruction, finishedInitRecon]() 
+  		{ initialReconstruction(reconstruction, finishedInitRecon); }, ctxt);
+
+  auto beforeAllocation = startTimer();
   auto allocTimeProm = new ebbrt::Promise<float>;
   auto allocTimeFut = allocTimeProm->GetFuture();
 
   reconstruction->WaitPool().Then(
-    [reconstruction, beforeAllocation, allocTimeProm](ebbrt::Future<void> f) {
+    [reconstruction, beforeAllocation, allocTimeProm, ctxt](ebbrt::Future<void> f) {
+ 
       allocTimeProm->SetValue(endTimer(beforeAllocation));
-
       f.Get();
 
-      // Spawn work to backends
-      ebbrt::event_manager->Spawn([reconstruction]() {
+      // Spawn work to backends on InitRecon core to ensure it starts after InitRecon finishes
+      cout << "allocated all backends, now spawning exec() to CPU " << _InitReconCPU << endl;
+      ebbrt::event_manager->SpawnRemote([reconstruction]() {
         reconstruction->Execute();
-      });
+      }, ctxt);
   });
 
   auto allocationTime = allocTimeFut.Block().Get();
+  auto initialReconstructionSeconds = finishedInitReconFut.Block().Get();
 
   reconstruction->ReconstructionDone().Then([reconstruction, startTime, 
       initialReconstructionSeconds, allocationTime](ebbrt::Future<void> f) {

@@ -20,6 +20,10 @@ namespace po = boost::program_options;
 
 struct arguments ARGUMENTS;
 
+size_t _FeIOCPU;
+
+size_t _InitReconCPU;
+
 char *EXEC_NAME;
 
 void parseInputParameters(int argc, char **argv);

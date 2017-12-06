@@ -117,7 +117,9 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, public 
       Create(ebbrt::EbbId id = ebbrt::ebb_allocator->Allocate());
 
     static irtkReconstruction& HandleFault(ebbrt::EbbId id);
-    ebbrt::Future<void> Ping(ebbrt::Messenger::NetworkId nid);
+
+    //ebbrt::Future<void> Ping(ebbrt::Messenger::NetworkId nid);
+    void Ping(ebbrt::Messenger::NetworkId nid);
 
     void ReceiveMessage(ebbrt::Messenger::NetworkId nid,
         std::unique_ptr<ebbrt::IOBuf>&& buffer);

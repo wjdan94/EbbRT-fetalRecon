@@ -22,6 +22,8 @@
 #define SCALE_VOLUME 11
 #define SLICE_TO_VOLUME_REGISTRATION 12
 #define GATHER_TIMERS 13
+#define PING 100
+
 
 #include <sys/time.h>
 #include <string>
