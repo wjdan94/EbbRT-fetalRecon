@@ -62,7 +62,7 @@ void irtkReconstruction::Ping(Messenger::NetworkId nid) {
 
   dp.Get<int>() = PING;
   SendMessage(nid, std::move(buf));
-  std::printf("Ping SetMessage\n");
+  std::printf("Ping Set Message\n");
 }
 
 void irtkReconstruction::ResetOrigin(
@@ -169,8 +169,6 @@ void irtkReconstruction::DefineWorkers() {
 
 void irtkReconstruction::CoeffInitBootstrap(ebbrt::IOBuf::DataPointer& dp, 
     size_t cpu) {
-
-  cout << "In CoeffInitBootstrap() with IO_CPU " << cpu << endl;
 
   auto parameters = dp.Get<struct coeffInitParameters>();
   auto reconstructionParameters = dp.Get<struct reconstructionParameters>();
@@ -683,8 +681,6 @@ void irtkReconstruction::GaussianReconstruction() {
 
 void irtkReconstruction::ReturnFromGaussianReconstruction(
     Messenger::NetworkId frontEndNid) {
-
-  cout << "In ReturnFromGaussianReconstruction() to send back to " << frontEndNid.ToString() << " from IO Core: " << _IOCPU << endl;
 
   ebbrt::event_manager->SpawnRemote(
       [this,frontEndNid]() {
@@ -1744,9 +1740,6 @@ void irtkReconstruction::ExecuteCoeffInit(ebbrt::IOBuf::DataPointer& dp,
 void irtkReconstruction::ExecuteGaussianReconstruction(
     Messenger::NetworkId frontEndNid) {
 
-
-  cout << "In ExecuteGaussianReconstruction() with frontEnd network " << frontEndNid.ToString() << endl;
-
   auto start = startTimer();
   GaussianReconstruction();
   ReturnFromGaussianReconstruction(frontEndNid);
@@ -1924,11 +1917,8 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
 
   auto targetCpu = (cpu + 1) % ebbrt::Cpu::Count();
 
-  string nidStr = nid.ToString();
-  cout << "Receiving message on network: " << nid.ToString() << " data of size: " << buffer->ComputeChainDataLength() << endl;
-
   ebbrt::event_manager->SpawnRemote(
-    [this, buffer = std::move(buffer), nid, nidStr, cpu]() {
+    [this, buffer = std::move(buffer), nid, cpu]() {
 
     auto len = buffer->ComputeChainDataLength();
     auto dp = buffer->GetDataPointer();
@@ -1999,7 +1989,7 @@ void irtkReconstruction::ReceiveMessage (Messenger::NetworkId nid,
         }
       case PING:
         {
-          cout << "recevied ping message from " << nidStr << endl;
+          cout << "recevied ping message" <<  endl;
           break;
         }
       default:

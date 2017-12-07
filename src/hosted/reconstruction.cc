@@ -198,8 +198,6 @@ vector<irtkRealImage> getStacks(EbbRef<irtkReconstruction> reconstruction) {
 
 void allocateBackends(EbbRef<irtkReconstruction> reconstruction) {
 
-  cout << "In allocateBackends() on CPU: " << ebbrt::Cpu::GetMine() << endl; 
-
   if (ARGUMENTS.debug) {
     std::cout << "Allocating backend nodes" << std::endl;
   }
@@ -218,7 +216,6 @@ void allocateBackends(EbbRef<irtkReconstruction> reconstruction) {
   pool_allocator->waitPool().Then(
     [reconstruction](ebbrt::Future<void> f) {
 
-    cout << "Inside pool_allocator->waitPool().Then() on CPU: " << ebbrt::Cpu::GetMine() << endl;
     f.Get();
 
     // Store the nids into reconstruction object
@@ -347,8 +344,6 @@ void eraseInputStackTuner(vector<irtkRealImage> stacks,
 void initialReconstruction(EbbRef<irtkReconstruction> reconstruction, ebbrt::Promise<float>* promise) {
   auto startTime = startTimer();
 
-  cout << "In Init. Reconstruction on CPU: " << ebbrt::Cpu::GetMine() << endl;
- 
   int templateNumber = -1;
 
   irtkRealImage* mask;
@@ -403,11 +398,9 @@ void initialReconstruction(EbbRef<irtkReconstruction> reconstruction, ebbrt::Pro
   // Initialize data structures for EM
   reconstruction->InitializeEM();
 
-  auto tot = endTimer(startTime);
-  promise->SetValue(tot);
+  promise->SetValue(endTimer(startTime));
 
   cout << "Finished Initial Recon" << endl;
-  cout << "Time is : " << tot << endl;
 } 
 
 
@@ -420,8 +413,6 @@ void AppMain() {
   _FeIOCPU = ebbrt::Cpu::GetMine();
   _InitReconCPU = (_FeIOCPU + 1) % cpu_num;
  
-  cout << "Starting the App on CPU: " << _FeIOCPU << endl;
-
   auto reconstruction = irtkReconstruction::Create();
   allocateBackends(reconstruction);
 
@@ -431,8 +422,6 @@ void AppMain() {
 
   auto cpu_i = ebbrt::Cpu::GetByIndex(_InitReconCPU);
   auto ctxt = cpu_i->get_context();
-
-  cout << "Init. Reconstruction spawned to " << _InitReconCPU << endl;
 
   ebbrt::event_manager->SpawnRemote([reconstruction, finishedInitRecon]() 
   		{ initialReconstruction(reconstruction, finishedInitRecon); }, ctxt);
@@ -448,7 +437,6 @@ void AppMain() {
       f.Get();
 
       // Spawn work to backends on InitRecon core to ensure it starts after InitRecon finishes
-      cout << "allocated all backends, now spawning exec() to CPU " << _InitReconCPU << endl;
       ebbrt::event_manager->SpawnRemote([reconstruction]() {
         reconstruction->Execute();
       }, ctxt);

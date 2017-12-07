@@ -347,6 +347,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
 
     void GatherFrontendTimers();
 
+    ebbrt::Context* GetCoreContext(ebbrt::Messenger::NetworkId nid);
+
     void Execute();
 
     // Static Reconstruction functions
