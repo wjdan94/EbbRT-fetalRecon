@@ -206,8 +206,13 @@ void allocateBackends(EbbRef<irtkReconstruction> reconstruction) {
                 "/bm/reconstruction.elf32";
 
   try {
+    // creates a vector of cpu id starting at InitRecon CPU + 1
+    // assumes number of fe-cpus = # of backends + 2
+    std::vector<size_t> cpu_ids(ARGUMENTS.numBackendNodes);
+    std::iota (std::begin(cpu_ids), std::end(cpu_ids), _InitReconCPU + 1);
+
     ebbrt::pool_allocator->AllocatePool(
-        bindir.string(), ARGUMENTS.numBackendNodes);
+        bindir.string(), ARGUMENTS.numBackendNodes, cpu_ids);
   } catch (std::runtime_error& e) {
     std::cerr << e.what() << std::endl;
     ebbrt::Cpu::Exit(EXIT_FAILURE);
@@ -414,6 +419,7 @@ void AppMain() {
   _InitReconCPU = (_FeIOCPU + 1) % cpu_num;
  
   auto reconstruction = irtkReconstruction::Create();
+
   allocateBackends(reconstruction);
 
   // to capture the Init Recon time
