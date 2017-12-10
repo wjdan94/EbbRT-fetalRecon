@@ -18,6 +18,8 @@
 #include <ebbrt/StaticIOBuf.h>
 #include <ebbrt/Cpu.h>
 
+#include <ebbrt/SpinLock.h>
+
 using namespace ebbrt;
 
 class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>, 
@@ -30,6 +32,8 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     std::unordered_map<uint32_t, ebbrt::Promise<void>> _promise_map;
     std::mutex _m;
     uint32_t _id{0};
+
+    ebbrt::SpinLock spinLock_;
 
     // EbbRT-related parameters
     std::vector<ebbrt::Messenger::NetworkId> _nids;
