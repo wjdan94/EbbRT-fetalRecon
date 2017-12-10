@@ -124,7 +124,6 @@ void irtkReconstruction::SetParameters(arguments args) {
   _recIterationsLast = args.recIterationsLast; 
   _numThreads = args.numThreads; // Not used
   _numBackendNodes = args.numBackendNodes; 
-  _numFrontendCPUs = args.numFrontendCPUs; // Not used
 
   _sigma = (args.sigma) > 0 ? args.sigma : 20;
   _resolution = args.resolution; // Not used

@@ -52,7 +52,6 @@ class irtkReconstruction : public ebbrt::Messagable<irtkReconstruction>,
     int _recIterationsLast; 
     int _numThreads; 
     int _numBackendNodes; 
-    int _numFrontendCPUs; 
 
     double _sigma; 
     double _resolution; 

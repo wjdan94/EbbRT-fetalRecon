@@ -95,7 +95,6 @@ struct arguments {
   int recIterationsLast;
   int numThreads;
   int numBackendNodes;
-  int numFrontendCPUs;
 
   unsigned int numInputStacksTuner;
   unsigned int T1PackageSize;

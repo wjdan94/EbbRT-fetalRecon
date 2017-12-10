@@ -107,9 +107,6 @@ void parseInputParameters(int argc, char **argv) {
       ("numThreads", 
         po::value<int>(&ARGUMENTS.numThreads)->default_value(1),
         "Number of CPU threads to run for TBB")
-      ("numFrontEndCpus", 
-        po::value<int>(&ARGUMENTS.numFrontendCPUs)->default_value(1),
-        "Number of front-end EbbRT nodes")
       ("numNodes", 
         po::value<int>(&ARGUMENTS.numBackendNodes)->default_value(1),
         "Number of back-end EbbRT nodes");
@@ -469,7 +466,7 @@ int main(int argc, char **argv) {
   EXEC_NAME = argv[0];
   parseInputParameters(argc, argv);
 
-  pthread_t tid = ebbrt::Cpu::EarlyInit((size_t) ARGUMENTS.numFrontendCPUs);
+  pthread_t tid = ebbrt::Cpu::EarlyInit((size_t) ARGUMENTS.numBackendNodes + 2);
   pthread_join(tid, &status);
   
   ebbrt::Cpu::Exit(EXIT_SUCCESS);
