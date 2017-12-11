@@ -178,15 +178,14 @@ ebbrt::Future<void> irtkReconstruction::ReconstructionDone() {
 }
 
 void irtkReconstruction::ReturnFrom() {
-  
   {
-  std::lock_guard<ebbrt::SpinLock> l(spinLock_);
-  _received++;
-  }
+    std::lock_guard<ebbrt::SpinLock> l(spinLock_);
+    _received++;
 
-  if (_received == _numBackendNodes) {
-    _received = 0;
-    _future.SetValue(1);
+    if (_received == _numBackendNodes) {
+      _received = 0;
+      _future.SetValue(1);
+    }
   }
 }
 
@@ -224,8 +223,8 @@ void irtkReconstruction::AssembleImage(ebbrt::IOBuf::DataPointer & dp) {
 void irtkReconstruction::ReturnFromGaussianReconstruction(
     ebbrt::IOBuf::DataPointer & dp) {
   {
-  std::lock_guard<ebbrt::SpinLock> l(spinLock_);
-  AssembleImage(dp);
+    std::lock_guard<ebbrt::SpinLock> l(spinLock_);
+    AssembleImage(dp);
   }
 
   ReturnFrom();
@@ -243,56 +242,53 @@ void irtkReconstruction::ReturnFromSimulateSlices(
 void irtkReconstruction::ReturnFromInitializeRobustStatistics(
     ebbrt::IOBuf::DataPointer & dp) {
   {
-  std::lock_guard<ebbrt::SpinLock> l(spinLock_);
-  int num = dp.Get<int>();
-  double sigma = dp.Get<double>();
-  _sigmaSum += sigma;
-  _numSum += num;
+    std::lock_guard<ebbrt::SpinLock> l(spinLock_);
+    int num = dp.Get<int>();
+    double sigma = dp.Get<double>();
+    _sigmaSum += sigma;
+    _numSum += num;
   }
 
   ReturnFrom();
 }
 
 void irtkReconstruction::ReturnFromEStepI(ebbrt::IOBuf::DataPointer & dp) {
-
   {
-  std::lock_guard<ebbrt::SpinLock> l(spinLock_);
-  auto parameters = dp.Get<struct eStepReturnParameters>();
+    std::lock_guard<ebbrt::SpinLock> l(spinLock_);
+    auto parameters = dp.Get<struct eStepReturnParameters>();
 
-  _sum += parameters.sum;
-  _den += parameters.den;
-  _den2 += parameters.den2;
-  _sum2 += parameters.sum2;
-  _maxs = (_maxs > parameters.maxs) ? _maxs : parameters.maxs;
-  _mins = (_mins < parameters.mins) ? _mins : parameters.mins;
+    _sum += parameters.sum;
+    _den += parameters.den;
+    _den2 += parameters.den2;
+    _sum2 += parameters.sum2;
+    _maxs = (_maxs > parameters.maxs) ? _maxs : parameters.maxs;
+    _mins = (_mins < parameters.mins) ? _mins : parameters.mins;
   }
 
   ReturnFrom();
 }
 
 void irtkReconstruction::ReturnFromEStepII(ebbrt::IOBuf::DataPointer & dp) {
-
   {
-  std::lock_guard<ebbrt::SpinLock> l(spinLock_);
-  auto parameters = dp.Get<struct eStepReturnParameters>();
+    std::lock_guard<ebbrt::SpinLock> l(spinLock_);
+    auto parameters = dp.Get<struct eStepReturnParameters>();
 
-  _sum += parameters.sum;
-  _den += parameters.den;
-  _den2 += parameters.den2;
-  _sum2 += parameters.sum2;
+    _sum += parameters.sum;
+    _den += parameters.den;
+    _den2 += parameters.den2;
+    _sum2 += parameters.sum2;
   }
 
   ReturnFrom();
 }
 
 void irtkReconstruction::ReturnFromEStepIII(ebbrt::IOBuf::DataPointer & dp) {
-
   {
-  std::lock_guard<ebbrt::SpinLock> l(spinLock_);
-  auto parameters = dp.Get<struct eStepReturnParameters>();
+    std::lock_guard<ebbrt::SpinLock> l(spinLock_);
+    auto parameters = dp.Get<struct eStepReturnParameters>();
 
-  _sum += parameters.sum;
-  _num += parameters.num;
+    _sum += parameters.sum;
+    _num += parameters.num;
   }
 
   ReturnFrom();
@@ -304,34 +300,33 @@ void irtkReconstruction::ReturnFromScale(ebbrt::IOBuf::DataPointer & dp) {
 
 void irtkReconstruction::ReturnFromSuperResolution(
     ebbrt::IOBuf::DataPointer & dp) {
-
   {
-  std::lock_guard<ebbrt::SpinLock> l(spinLock_);
+    std::lock_guard<ebbrt::SpinLock> l(spinLock_);
 
-  // Read addon image
-  int addonSize = dp.Get<int>();
-  dp.Get(addonSize*sizeof(double), (uint8_t*) _imageDoublePtr);
-  _addon.SumVec(_imageDoublePtr);
+    // Read addon image
+    int addonSize = dp.Get<int>();
+    dp.Get(addonSize*sizeof(double), (uint8_t*) _imageDoublePtr);
+    _addon.SumVec(_imageDoublePtr);
 
-  // Read confidenceMap image
-  int confidenceMapSize = dp.Get<int>();
-  dp.Get(addonSize*sizeof(double), (uint8_t*) _imageDoublePtr);
-  _confidenceMap.SumVec(_imageDoublePtr);
+    // Read confidenceMap image
+    int confidenceMapSize = dp.Get<int>();
+    dp.Get(addonSize*sizeof(double), (uint8_t*) _imageDoublePtr);
+    _confidenceMap.SumVec(_imageDoublePtr);
   }
 
   ReturnFrom();
 }
 
 void irtkReconstruction::ReturnFromMStep(ebbrt::IOBuf::DataPointer & dp) {
-
   {
-  std::lock_guard<ebbrt::SpinLock> l(spinLock_);
-  auto parameters = dp.Get<struct mStepReturnParameters>();
-  _mSigma += parameters.sigma;
-  _mMix += parameters.mix;
-  _mNum += parameters.num;
-  _mMax = (_mMax > parameters.max) ? _mMax : parameters.max;
-  _mMin = (_mMin < parameters.min) ? _mMin : parameters.min;
+    std::lock_guard<ebbrt::SpinLock> l(spinLock_);
+    auto parameters = dp.Get<struct mStepReturnParameters>();
+
+    _mSigma += parameters.sigma;
+    _mMix += parameters.mix;
+    _mNum += parameters.num;
+    _mMax = (_mMax > parameters.max) ? _mMax : parameters.max;
+    _mMin = (_mMin < parameters.min) ? _mMin : parameters.min;
   }
 
   ReturnFrom();
@@ -344,12 +339,12 @@ void irtkReconstruction::ReturnFromRestoreSliceIntensities(
 
 void irtkReconstruction::ReturnFromScaleVolume(
     ebbrt::IOBuf::DataPointer & dp) {
-
   {
-  std::lock_guard<ebbrt::SpinLock> l(spinLock_);
-  auto parameters = dp.Get<struct scaleVolumeParameters>();
-  _num += parameters.num;
-  _den += parameters.den;
+    std::lock_guard<ebbrt::SpinLock> l(spinLock_);
+    auto parameters = dp.Get<struct scaleVolumeParameters>();
+
+    _num += parameters.num;
+    _den += parameters.den;
   }
 
   ReturnFrom();
@@ -357,16 +352,14 @@ void irtkReconstruction::ReturnFromScaleVolume(
 
 void irtkReconstruction::ReturnFromSliceToVolumeRegistration(
     ebbrt::IOBuf::DataPointer & dp) {
-
   {
-  std::lock_guard<ebbrt::SpinLock> l(spinLock_);
-  int start = dp.Get<int>();
-  int end = dp.Get<int>();
+    std::lock_guard<ebbrt::SpinLock> l(spinLock_);
+    int start = dp.Get<int>();
+    int end = dp.Get<int>();
 
-  for(int i = start; i < end; i++) {
-    deserializeTransformations(dp, _transformations[i]);
-  }
-
+    for(int i = start; i < end; i++) {
+      deserializeTransformations(dp, _transformations[i]);
+    }
   }
 
   ReturnFrom();
@@ -374,8 +367,12 @@ void irtkReconstruction::ReturnFromSliceToVolumeRegistration(
 
 void irtkReconstruction::ReturnFromGatherTimers(
     ebbrt::IOBuf::DataPointer & dp) {
-  auto phases = dp.Get<phases_data>();
-  _backend_performance.emplace_back(phases);
+  {
+    std::lock_guard<ebbrt::SpinLock> l(spinLock_);
+    auto phases = dp.Get<phases_data>();
+    _backend_performance.emplace_back(phases);
+  }
+
   ReturnFrom();
 }
 
