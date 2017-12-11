@@ -472,6 +472,10 @@ int main(int argc, char **argv) {
   EXEC_NAME = argv[0];
   parseInputParameters(argc, argv);
 
+  // define FE IO and Init. Recon CPUs
+  _FeIOCPU = 0;
+  _InitReconCPU = 0;
+
   pthread_t tid = ebbrt::Cpu::EarlyInit((size_t) ARGUMENTS.numBackendNodes + 2);
   pthread_join(tid, &status);
   
