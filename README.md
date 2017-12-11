@@ -51,16 +51,16 @@ $ make -j
 
 ## Run with small dataset
 ```
-./contrib/small.sh <threads> <iterations> <back_end_nodes> <front_end_cpus>
+./contrib/small.sh <threads> <iterations> <back_end_nodes>
 ```
 Example:
 ```
-./contrib/small.sh 2 4 2 3
+./contrib/small.sh 2 4 2
 ```
 
 ## Run with large dataset
 ```
-./contrib/large.sh <threads> <iterations> <back_end_nodes> <front_end_cpus>
+./contrib/large.sh <threads> <iterations> <back_end_nodes>
 ```
 
 **Note:** both datasets must be run with *at least* 2 threads and the following environment variables must be set:

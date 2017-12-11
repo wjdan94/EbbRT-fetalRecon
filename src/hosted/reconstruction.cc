@@ -107,9 +107,6 @@ void parseInputParameters(int argc, char **argv) {
       ("numThreads", 
         po::value<int>(&ARGUMENTS.numThreads)->default_value(1),
         "Number of CPU threads to run for TBB")
-      ("numFrontEndCpus", 
-        po::value<int>(&ARGUMENTS.numFrontendCPUs)->default_value(1),
-        "Number of front-end EbbRT nodes")
       ("numNodes", 
         po::value<int>(&ARGUMENTS.numBackendNodes)->default_value(1),
         "Number of back-end EbbRT nodes");
@@ -206,8 +203,13 @@ void allocateBackends(EbbRef<irtkReconstruction> reconstruction) {
                 "/bm/reconstruction.elf32";
 
   try {
+    // creates a vector of cpu id starting at InitRecon CPU + 1
+    // assumes number of fe-cpus = # of backends + 2
+    std::vector<size_t> cpu_ids(ARGUMENTS.numBackendNodes);
+    std::iota (std::begin(cpu_ids), std::end(cpu_ids), _InitReconCPU + 1);
+
     ebbrt::pool_allocator->AllocatePool(
-        bindir.string(), ARGUMENTS.numBackendNodes);
+        bindir.string(), ARGUMENTS.numBackendNodes, cpu_ids);
   } catch (std::runtime_error& e) {
     std::cerr << e.what() << std::endl;
     ebbrt::Cpu::Exit(EXIT_FAILURE);
@@ -414,6 +416,7 @@ void AppMain() {
   _InitReconCPU = (_FeIOCPU + 1) % cpu_num;
  
   auto reconstruction = irtkReconstruction::Create();
+
   allocateBackends(reconstruction);
 
   // to capture the Init Recon time
@@ -469,7 +472,11 @@ int main(int argc, char **argv) {
   EXEC_NAME = argv[0];
   parseInputParameters(argc, argv);
 
-  pthread_t tid = ebbrt::Cpu::EarlyInit((size_t) ARGUMENTS.numFrontendCPUs);
+  // define FE IO and Init. Recon CPUs
+  _FeIOCPU = 0;
+  _InitReconCPU = 0;
+
+  pthread_t tid = ebbrt::Cpu::EarlyInit((size_t) ARGUMENTS.numBackendNodes + 2);
   pthread_join(tid, &status);
   
   ebbrt::Cpu::Exit(EXIT_SUCCESS);
